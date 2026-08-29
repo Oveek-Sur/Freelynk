@@ -131,6 +131,37 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                /*
+                 * Whether the radio is on a WiFi network at all.
+                 *
+                 * Deliberately NOT WifiManager.getConnectionInfo(): from
+                 * Android 9 the SSID counts as location data, so a
+                 * backgrounded app gets "<unknown ssid>" back. Reading that
+                 * as "disconnected" made the app announce a dropped
+                 * connection every time it left the foreground — and tear
+                 * down its own keep-alive service with it.
+                 *
+                 * ConnectivityManager answers truthfully in the background
+                 * and needs no location grant.
+                 */
+                "isWifiConnected" -> {
+                    try {
+                        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                        val connected = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val active = cm.activeNetwork
+                            val caps = active?.let { cm.getNetworkCapabilities(it) }
+                            caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                        } else {
+                            @Suppress("DEPRECATION")
+                            cm.activeNetworkInfo?.type == android.net.ConnectivityManager.TYPE_WIFI
+                        }
+                        result.success(connected)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "could not read wifi state", e)
+                        result.success(false)
+                    }
+                }
+
                 // ------------------------------------------- keep alive
                 "startKeepAlive" -> {
                     try {

@@ -243,6 +243,22 @@ class WifiConnector {
     }
   }
 
+  /// Whether the radio is on a WiFi network, whoever it belongs to.
+  ///
+  /// [currentSsid] cannot answer this. From Android 9 the SSID counts as
+  /// location data, so a backgrounded app is handed `<unknown ssid>` — which
+  /// is indistinguishable from "not connected" unless you ask a different
+  /// question. ConnectivityManager is not redacted, so it stays honest while
+  /// the app is in the background, which is exactly when it matters.
+  Future<bool> isOnWifi() async {
+    if (!Platform.isAndroid) return false;
+    final on = await _safe(
+      () => _channel.invokeMethod<bool>('isWifiConnected'),
+      timeout: const Duration(seconds: 4),
+    );
+    return on ?? false;
+  }
+
   /// True when the current network actually reaches the internet.
   Future<bool> hasInternet() async {
     try {

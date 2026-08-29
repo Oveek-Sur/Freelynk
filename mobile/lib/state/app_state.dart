@@ -233,8 +233,16 @@ class ConnectionController extends StateNotifier<ConnectionState> {
     if (!mounted) return;
 
     if (ssid == null) {
+      // A null SSID does NOT mean we fell off the network. Android redacts
+      // it for backgrounded apps, so this fires constantly while the app sits
+      // behind another one — and acting on it would announce a phantom
+      // disconnect and stop the keep-alive service, dropping the very
+      // connection it exists to protect. Ask the radio before believing it.
+      if (await _wifi.isOnWifi()) return;
+      if (!mounted) return;
+
       _ticksSinceProbe = 0;
-      // Nothing to hold the process open for any more.
+      // Genuinely off WiFi: nothing left to hold the process open for.
       _syncKeepAlive(null);
       if (state.phase == ConnectionPhase.connected) {
         state = state.copyWith(
