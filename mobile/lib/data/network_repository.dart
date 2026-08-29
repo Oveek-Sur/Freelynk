@@ -36,6 +36,12 @@ class NetworkRepository {
   static const _prefsEtag = 'sync_etag';
   static const _prefsSyncedAt = 'sync_at';
 
+  /// Injectable so tests can simulate a dead connection. Production code
+  /// never passes one.
+  final http.Client _client;
+
+  NetworkRepository({http.Client? client}) : _client = client ?? http.Client();
+
   Future<File> _file() async {
     final dir = await getApplicationSupportDirectory();
     if (!await dir.exists()) await dir.create(recursive: true);
@@ -86,7 +92,7 @@ class NetworkRepository {
     final prefs = await SharedPreferences.getInstance();
 
     try {
-      final res = await http.get(
+      final res = await _client.get(
         AppConfig.syncUrl,
         headers: {
           'X-Client-Key': AppConfig.clientKey,

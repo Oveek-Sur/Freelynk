@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { WifiNetwork } from "@/lib/db";
 
 type Draft = {
@@ -27,16 +26,12 @@ const EMPTY: Draft = {
 };
 
 export default function NetworkManager({
-  admin,
   initial,
-  loadError,
+  onFlash,
 }: {
-  admin: string;
   initial: WifiNetwork[];
-  loadError: string | null;
+  onFlash: (msg: string) => void;
 }) {
-  const router = useRouter();
-
   const [rows, setRows] = useState<WifiNetwork[]>(initial);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<Draft>(EMPTY);
@@ -44,7 +39,6 @@ export default function NetworkManager({
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -57,11 +51,6 @@ export default function NetworkManager({
   }, [rows, query]);
 
   const activeCount = rows.filter((r) => r.is_active).length;
-
-  function notify(msg: string) {
-    setFlash(msg);
-    setTimeout(() => setFlash(null), 2600);
-  }
 
   async function refresh() {
     const res = await fetch("/api/networks");
@@ -86,7 +75,7 @@ export default function NetworkManager({
       if (!res.ok) throw new Error(json.error ?? "সেভ করা যায়নি।");
 
       await refresh();
-      notify(editingId ? "আপডেট হয়েছে।" : "নতুন নেটওয়ার্ক যোগ হয়েছে।");
+      onFlash(editingId ? "আপডেট হয়েছে।" : "নতুন নেটওয়ার্ক যোগ হয়েছে।");
       setDraft(EMPTY);
       setEditingId(null);
     } catch (err) {
@@ -113,7 +102,7 @@ export default function NetworkManager({
     const res = await fetch(`/api/networks/${row.id}`, { method: "DELETE" });
     if (res.ok) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
-      notify("মুছে ফেলা হয়েছে।");
+      onFlash("মুছে ফেলা হয়েছে।");
     } else {
       setError("মুছতে ব্যর্থ।");
     }
@@ -142,33 +131,11 @@ export default function NetworkManager({
     });
   }
 
-  async function logout() {
-    await fetch("/api/logout", { method: "POST" });
-    router.replace("/login");
-    router.refresh();
-  }
-
   return (
-    <main className="mx-auto max-w-6xl px-5 py-8">
-      {/* Header */}
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">FreeLynk Admin</h1>
-          <p className="mt-1 text-sm text-sky-200/50">
-            {rows.length} টি নেটওয়ার্ক · {activeCount} টি সক্রিয় · সাইন-ইন:{" "}
-            <span className="text-sky-200/80">{admin}</span>
-          </p>
-        </div>
-        <button onClick={logout} className="btn-ghost">
-          লগআউট
-        </button>
-      </header>
-
-      {loadError && (
-        <p className="mb-6 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          ডেটাবেস সংযোগ সমস্যা: {loadError}
-        </p>
-      )}
+    <>
+      <p className="mb-5 text-sm text-sky-200/50">
+        {rows.length} টি নেটওয়ার্ক · {activeCount} টি সক্রিয়
+      </p>
 
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         {/* ---------------- Form ---------------- */}
@@ -398,12 +365,6 @@ export default function NetworkManager({
           )}
         </section>
       </div>
-
-      {flash && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/25 bg-emerald-500/15 px-5 py-2.5 text-sm text-emerald-100 shadow-lg backdrop-blur">
-          {flash}
-        </div>
-      )}
-    </main>
+    </>
   );
 }

@@ -6,6 +6,8 @@ import '../core/app_config.dart';
 import '../core/theme.dart';
 import '../data/wifi_network.dart';
 import '../state/app_state.dart';
+import 'shops_screen.dart';
+import 'widgets/banner_carousel.dart';
 import 'widgets/connect_orb.dart';
 import 'widgets/network_tile.dart';
 
@@ -33,7 +35,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _refresh() async {
-    await ref.read(libraryProvider.notifier).refresh();
+    // WiFi data works offline, banners/shops need the internet. Run both at
+    // once so the offline path never waits on the online one.
+    await Future.wait([
+      ref.read(libraryProvider.notifier).refresh(),
+      ref.read(contentProvider.notifier).refresh(),
+    ]);
     await ref.read(connectionProvider.notifier).scan();
   }
 
@@ -79,6 +86,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onSync: _refresh,
                 ),
 
+                // Nothing is rendered when the admin has no active banners.
+                BannerCarousel(banners: ref.watch(contentProvider).banners),
+
                 if (!AppConfig.isConfigured) const _ConfigWarning(),
 
                 if (library.notice != null)
@@ -111,6 +121,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onDisconnect: () =>
                       ref.read(connectionProvider.notifier).disconnect(),
                 ),
+
+                const SizedBox(height: 16),
+                const _ShopsEntry(),
 
                 const SizedBox(height: 28),
 
@@ -519,6 +532,78 @@ class _ConfigWarning extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Doorway to the partner shops list.
+///
+/// Always visible, even with nothing to show — tapping through to a screen
+/// that explains "ইন্টারনেট প্রয়োজন" is clearer than a button that silently
+/// disappears whenever the user happens to be offline.
+class _ShopsEntry extends ConsumerWidget {
+  const _ShopsEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final content = ref.watch(contentProvider);
+    final count = content.shops.length;
+
+    return GlassCard(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ShopsScreen()),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.amber.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(
+              Icons.storefront_rounded,
+              size: 19,
+              color: AppColors.amber,
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'পার্টনার দোকান',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+                Text(
+                  content.loading && count == 0
+                      ? 'লোড হচ্ছে…'
+                      : count > 0
+                          ? '$count টি দোকান দেখুন'
+                          : 'দেখতে ইন্টারনেট লাগবে',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textFaint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textFaint,
+            size: 20,
+          ),
+        ],
       ),
     );
   }

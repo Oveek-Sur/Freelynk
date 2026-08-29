@@ -32,6 +32,9 @@ class AppConfig {
 
   static Uri get syncUrl => Uri.parse('$baseUrl/api/sync');
 
+  /// Banners and partner shops. Plain JSON, needs a live connection.
+  static Uri get contentUrl => Uri.parse('$baseUrl/api/content');
+
   static bool get isConfigured =>
       !clientKey.startsWith('replace-me') && !syncSecret.startsWith('replace-me');
 }

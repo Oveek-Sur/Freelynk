@@ -2,12 +2,61 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/content.dart';
+import '../data/content_repository.dart';
 import '../data/network_repository.dart';
 import '../data/wifi_network.dart';
 import '../services/wifi_connector.dart';
 
 final repositoryProvider = Provider((_) => NetworkRepository());
 final connectorProvider = Provider((_) => WifiConnector());
+final contentRepositoryProvider = Provider((_) => ContentRepository());
+
+// ============================================================ content
+
+/// Banners + partner shops. Online only, by design.
+class ContentState {
+  final AppContent content;
+  final bool loading;
+  final String? error;
+
+  const ContentState({
+    this.content = const AppContent(),
+    this.loading = false,
+    this.error,
+  });
+
+  List<AppBanner> get banners => content.banners;
+  List<Shop> get shops => content.shops;
+}
+
+class ContentController extends StateNotifier<ContentState> {
+  final ContentRepository _repo;
+
+  ContentController(this._repo) : super(const ContentState(loading: true)) {
+    unawaited(refresh());
+  }
+
+  Future<void> refresh() async {
+    state = ContentState(content: state.content, loading: true);
+
+    final result = await _repo.fetch();
+    if (!mounted) return;
+
+    state = ContentState(
+      // Keep whatever we already had if this attempt failed, so a dropped
+      // connection doesn't blank out a banner the user was looking at.
+      content: result.error == null ? result.content : state.content,
+      loading: false,
+      error: result.error,
+    );
+  }
+}
+
+final contentProvider =
+    StateNotifierProvider<ContentController, ContentState>((ref) {
+  return ContentController(ref.watch(contentRepositoryProvider));
+});
 
 // ============================================================ library
 
