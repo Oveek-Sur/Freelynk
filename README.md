@@ -1,4 +1,4 @@
-# ShareLynk
+# FreeLynk
 
 Offline-first WiFi access app. **No login, no payments, no subscriptions.**
 
@@ -105,16 +105,16 @@ test skips instead of failing.
 ### Signing key (do this once, before you hand the APK to anyone)
 
 ```bash
-keytool -genkey -v -keystore sharelynk.jks -keyalg RSA \
-        -keysize 2048 -validity 10000 -alias sharelynk
+keytool -genkey -v -keystore freelynk.jks -keyalg RSA \
+        -keysize 2048 -validity 10000 -alias freelynk
 ```
 
 Create `mobile/android/key.properties` — it is git-ignored:
 
 ```properties
-storeFile=C:/keys/sharelynk.jks
+storeFile=C:/keys/freelynk.jks
 storePassword=...
-keyAlias=sharelynk
+keyAlias=freelynk
 keyPassword=...
 ```
 
@@ -187,7 +187,7 @@ and redistribute. Old APKs immediately start getting 403.
 ## Layout
 
 ```
-sharelynk/
+freelynk/
 ├── admin-web/                  Next.js 15 · deploy to Vercel
 │   ├── schema.sql              run once in Supabase
 │   └── src/

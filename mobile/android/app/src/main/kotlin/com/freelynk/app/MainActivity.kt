@@ -1,4 +1,4 @@
-package com.sharelynk.app
+package com.freelynk.app
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -16,7 +16,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val channelName = "com.sharelynk.app/wifi"
+    private val channelName = "com.freelynk.app/wifi"
     private var boundNetwork: Network? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 

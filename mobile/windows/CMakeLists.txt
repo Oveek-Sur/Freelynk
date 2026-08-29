@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 project(practice2 LANGUAGES CXX)
 
 # The name of the executable created for the application.
-set(BINARY_NAME "sharelynk")
+set(BINARY_NAME "freelynk")
 
 # Explicitly opt in to modern CMake behaviors.
 cmake_policy(VERSION 3.14...3.25)

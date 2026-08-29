@@ -17,7 +17,7 @@ class AppConfig {
 
   static const String baseUrl = String.fromEnvironment(
     'SYNC_BASE_URL',
-    defaultValue: 'https://sharelynk.vercel.app',
+    defaultValue: 'https://freelynk.vercel.app',
   );
 
   static const String clientKey = String.fromEnvironment(

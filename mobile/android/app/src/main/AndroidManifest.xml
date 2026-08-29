@@ -24,7 +24,7 @@
         tools:targetApi="33" />
 
     <application
-        android:label="ShareLynk"
+        android:label="FreeLynk"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

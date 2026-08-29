@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sharelynk/core/payload_cipher.dart';
-import 'package:sharelynk/data/wifi_network.dart';
+import 'package:freelynk/core/payload_cipher.dart';
+import 'package:freelynk/data/wifi_network.dart';
 
 /// This fixture was produced by the REAL server code path
 /// (`admin-web/src/lib/crypto.ts` → node:crypto AES-256-GCM).

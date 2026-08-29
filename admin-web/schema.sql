@@ -1,5 +1,5 @@
 -- ===============================================================
--- ShareLynk — database schema
+-- FreeLynk — database schema
 -- Run this once in Supabase → SQL Editor.
 -- ===============================================================
 

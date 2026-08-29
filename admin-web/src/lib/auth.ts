@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
-const COOKIE = "sl_session";
+const COOKIE = "fl_session";
 const MAX_AGE = 60 * 60 * 12; // 12 hours
 
 function secret(): Uint8Array {

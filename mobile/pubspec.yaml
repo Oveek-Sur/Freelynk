@@ -1,5 +1,5 @@
-name: sharelynk
-description: "ShareLynk — offline-first WiFi access. No login, no payments."
+name: freelynk
+description: "FreeLynk — offline-first WiFi access. No login, no payments."
 publish_to: 'none'
 version: 2.0.0+1
 

@@ -1,4 +1,4 @@
-# ShareLynk — ProGuard / R8 rules
+# FreeLynk — ProGuard / R8 rules
 #
 # The old rules here referenced Supabase, Hive and flutter_background_service,
 # none of which exist in this app any more.
@@ -9,7 +9,7 @@
 -dontwarn io.flutter.embedding.**
 
 # Our MethodChannel host
--keep class com.sharelynk.app.MainActivity { *; }
+-keep class com.freelynk.app.MainActivity { *; }
 
 # wifi_iot / wifi_scan talk to framework classes reflectively
 -keep class com.alternadom.wifiiot.** { *; }

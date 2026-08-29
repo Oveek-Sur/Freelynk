@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sharelynk/core/payload_cipher.dart';
+import 'package:freelynk/core/payload_cipher.dart';
 
 /// Cross-language check: bytes produced by the Node server must decrypt with
 /// the Dart cipher. AES-GCM implementations disagree in exactly the places

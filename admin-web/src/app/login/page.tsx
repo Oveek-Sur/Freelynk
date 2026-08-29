@@ -47,7 +47,7 @@ export default function LoginPage() {
               <path d="M12 18.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Zm0-4.6c1.5 0 2.9.6 3.9 1.6l-1.6 1.6a3.3 3.3 0 0 0-4.6 0L8.1 15.5a5.5 5.5 0 0 1 3.9-1.6Zm0-4.5c2.7 0 5.2 1.1 7 2.9l-1.6 1.6a7.6 7.6 0 0 0-10.8 0L5 12.3a9.9 9.9 0 0 1 7-2.9Zm0-4.5c4 0 7.6 1.6 10.2 4.2l-1.6 1.6a12.2 12.2 0 0 0-17.2 0L1.8 5.1A14.4 14.4 0 0 1 12 4.9Z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">ShareLynk</h1>
+          <h1 className="text-2xl font-bold tracking-tight">FreeLynk</h1>
           <p className="mt-1 text-sm text-sky-200/50">অ্যাডমিন প্যানেল</p>
         </div>
 

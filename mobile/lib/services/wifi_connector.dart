@@ -20,7 +20,7 @@ class WifiException implements Exception {
 }
 
 class WifiConnector {
-  static const MethodChannel _channel = MethodChannel('com.sharelynk.app/wifi');
+  static const MethodChannel _channel = MethodChannel('com.freelynk.app/wifi');
 
   // ------------------------------------------------------------ permission
 

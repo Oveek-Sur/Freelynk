@@ -69,7 +69,7 @@ try {
   });
   cookie = (good.headers.get("set-cookie") ?? "").split(";")[0];
   check("correct password accepted", good.status === 200, `got ${good.status}`);
-  check("session cookie issued", cookie.startsWith("sl_session="));
+  check("session cookie issued", cookie.startsWith("fl_session="));
 
   const noAuth = await fetch(`${BASE}/api/networks`);
   check("network list needs auth", noAuth.status === 401, `got ${noAuth.status}`);

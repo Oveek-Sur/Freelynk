@@ -153,7 +153,7 @@ export default function NetworkManager({
       {/* Header */}
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">ShareLynk Admin</h1>
+          <h1 className="text-2xl font-bold tracking-tight">FreeLynk Admin</h1>
           <p className="mt-1 text-sm text-sky-200/50">
             {rows.length} টি নেটওয়ার্ক · {activeCount} টি সক্রিয় · সাইন-ইন:{" "}
             <span className="text-sky-200/80">{admin}</span>

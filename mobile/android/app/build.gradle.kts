@@ -11,14 +11,14 @@ plugins {
 //
 // Create android/key.properties (git-ignored) to sign real builds:
 //
-//   storeFile=C:/keys/sharelynk.jks
+//   storeFile=C:/keys/freelynk.jks
 //   storePassword=...
-//   keyAlias=sharelynk
+//   keyAlias=freelynk
 //   keyPassword=...
 //
 // Generate the keystore once:
-//   keytool -genkey -v -keystore sharelynk.jks -keyalg RSA \
-//           -keysize 2048 -validity 10000 -alias sharelynk
+//   keytool -genkey -v -keystore freelynk.jks -keyalg RSA \
+//           -keysize 2048 -validity 10000 -alias freelynk
 //
 // Without that file the build still works but falls back to the debug key —
 // fine for testing on your own phone, NOT for anything you hand out. A
@@ -32,7 +32,7 @@ if (hasKeystore) {
 }
 
 android {
-    namespace = "com.sharelynk.app"
+    namespace = "com.freelynk.app"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -47,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.sharelynk.app"
+        applicationId = "com.freelynk.app"
         minSdk = 24
         targetSdk = 34
         versionCode = flutter.versionCode
@@ -71,7 +71,7 @@ android {
                 signingConfigs.getByName("release")
             } else {
                 logger.warn(
-                    "ShareLynk: android/key.properties not found — signing " +
+                    "FreeLynk: android/key.properties not found — signing " +
                         "release with the DEBUG key. Do not distribute this build."
                 )
                 signingConfigs.getByName("debug")

@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ShareLynk Admin",
-  description: "WiFi network manager for the ShareLynk app",
+  title: "FreeLynk Admin",
+  description: "WiFi network manager for the FreeLynk app",
   robots: { index: false, follow: false },
 };
 

@@ -10,16 +10,16 @@ void main() {
   SystemChrome.setSystemUIOverlayStyle(AppTheme.systemOverlay);
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  runApp(const ProviderScope(child: ShareLynkApp()));
+  runApp(const ProviderScope(child: FreeLynkApp()));
 }
 
-class ShareLynkApp extends StatelessWidget {
-  const ShareLynkApp({super.key});
+class FreeLynkApp extends StatelessWidget {
+  const FreeLynkApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ShareLynk',
+      title: 'FreeLynk',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       home: const HomeScreen(),

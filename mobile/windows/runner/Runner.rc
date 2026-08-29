@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.sharelynk" "\0"
-            VALUE "FileDescription", "ShareLynk" "\0"
+            VALUE "CompanyName", "com.freelynk" "\0"
+            VALUE "FileDescription", "FreeLynk" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "sharelynk" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 ShareLynk. All rights reserved." "\0"
-            VALUE "OriginalFilename", "sharelynk.exe" "\0"
-            VALUE "ProductName", "ShareLynk" "\0"
+            VALUE "InternalName", "freelynk" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 FreeLynk. All rights reserved." "\0"
+            VALUE "OriginalFilename", "freelynk.exe" "\0"
+            VALUE "ProductName", "FreeLynk" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
