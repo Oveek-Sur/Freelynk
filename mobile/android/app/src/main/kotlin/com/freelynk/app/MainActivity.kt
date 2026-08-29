@@ -8,7 +8,10 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -160,32 +163,76 @@ class MainActivity : FlutterActivity() {
 
         networkCallback?.let {
             try { cm.unregisterNetworkCallback(it) } catch (_: Exception) {}
+            networkCallback = null
         }
 
-        var resultSent = false
+        // A MethodChannel result must be delivered exactly once. Miss it and
+        // the Dart side awaits a Future that never completes — which is
+        // exactly what happened on a Unisoc Android 11 handset: this callback
+        // fired neither onAvailable nor onUnavailable, and the UI sat on
+        // "কানেক্ট হচ্ছে" for minutes with no error and no way out.
+        //
+        // requestNetwork's own timeout is not trustworthy on every ROM, so we
+        // run a watchdog too and make delivery idempotent.
+        val delivered = AtomicBoolean(false)
+        val watchdog = Handler(Looper.getMainLooper())
 
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
+        fun deliver(value: Boolean) {
+            if (delivered.compareAndSet(false, true)) {
+                watchdog.removeCallbacksAndMessages(null)
+                runOnUiThread {
+                    try { result.success(value) } catch (_: Exception) {}
+                }
+            }
+        }
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 super.onAvailable(network)
-                if (!resultSent) {
-                    resultSent = true
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
                         cm.bindProcessToNetwork(network)
                         boundNetwork = network
+                    } catch (e: Exception) {
+                        Log.w(TAG, "bindProcessToNetwork failed", e)
+                        deliver(false)
+                        return
                     }
-                    runOnUiThread { result.success(true) }
                 }
+                deliver(true)
             }
 
             override fun onUnavailable() {
                 super.onUnavailable()
-                if (!resultSent) {
-                    resultSent = true
-                    runOnUiThread { result.success(false) }
-                }
+                deliver(false)
             }
         }
+        networkCallback = callback
 
-        cm.requestNetwork(request, networkCallback!!, 5000)
+        try {
+            cm.requestNetwork(request, callback, REQUEST_TIMEOUT_MS)
+        } catch (e: Exception) {
+            // SecurityException on ROMs that restrict CHANGE_NETWORK_STATE.
+            // Answer the caller rather than stranding it.
+            Log.w(TAG, "requestNetwork failed", e)
+            networkCallback = null
+            deliver(false)
+            return
+        }
+
+        // Outlive the platform timeout by a margin, then answer anyway and
+        // release the callback so it cannot leak.
+        watchdog.postDelayed({
+            if (!delivered.get()) {
+                try { cm.unregisterNetworkCallback(callback) } catch (_: Exception) {}
+                if (networkCallback === callback) networkCallback = null
+                deliver(false)
+            }
+        }, REQUEST_TIMEOUT_MS + 2000L)
+    }
+
+    private companion object {
+        const val TAG = "FreeLynk"
+        const val REQUEST_TIMEOUT_MS = 5000
     }
 }

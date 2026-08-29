@@ -96,19 +96,29 @@ class WifiConnector {
     final results = await WiFiScan.instance.getScannedResults();
 
     // Strongest reading wins when an SSID shows up on several APs/bands.
-    final strongest = <String, int>{};
+    // Keep the SSID as broadcast, not the normalised key — we match loosely
+    // but must join byte-exactly. See [NearbyNetwork.onAirSsid].
+    final strongest = <String, ({int level, String ssid})>{};
     for (final ap in results) {
       final key = WifiNetwork.normalizeSsid(ap.ssid);
       if (key.isEmpty) continue;
       final current = strongest[key];
-      if (current == null || ap.level > current) strongest[key] = ap.level;
+      if (current == null || ap.level > current.level) {
+        strongest[key] = (level: ap.level, ssid: ap.ssid.trim());
+      }
     }
 
     final nearby = <NearbyNetwork>[];
     for (final network in saved) {
-      final level = strongest[network.key];
-      if (level != null) {
-        nearby.add(NearbyNetwork(network: network, level: level));
+      final hit = strongest[network.key];
+      if (hit != null) {
+        nearby.add(
+          NearbyNetwork(
+            network: network,
+            level: hit.level,
+            onAirSsid: hit.ssid,
+          ),
+        );
       }
     }
 
@@ -132,8 +142,14 @@ class WifiConnector {
   // -------------------------------------------------------------- connect
 
   /// Joins [network]. Throws [WifiException] with a readable reason on failure.
-  Future<void> connect(WifiNetwork network) async {
-    final ssid = network.ssid.replaceAll('"', '').trim();
+  ///
+  /// Pass [onAirSsid] — the SSID as the scan reported it — whenever the
+  /// network was just seen. Android joins by exact bytes, so the database's
+  /// capitalisation is not good enough. See [NearbyNetwork.onAirSsid].
+  Future<void> connect(WifiNetwork network, {String? onAirSsid}) async {
+    final ssid = (onAirSsid?.trim().isNotEmpty ?? false)
+        ? onAirSsid!.replaceAll('"', '').trim()
+        : network.ssid.replaceAll('"', '').trim();
 
     // Drop any process-level binding left over from a previous session,
     // otherwise Android keeps routing traffic through the old network.
@@ -142,7 +158,7 @@ class WifiConnector {
     await _safe(() => WiFiForIoTPlugin.disconnect());
     await Future<void>.delayed(const Duration(seconds: 1));
 
-    final joined = await WiFiForIoTPlugin.connect(
+    final accepted = await WiFiForIoTPlugin.connect(
       ssid,
       password: network.isOpen ? null : network.password,
       security: switch (network.security) {
@@ -157,13 +173,42 @@ class WifiConnector {
       onTimeout: () => false,
     );
 
-    if (!joined) {
+    if (!accepted) {
       throw const WifiException(
         'কানেক্ট করা গেল না। পাসওয়ার্ড ভুল হতে পারে, অথবা সিগন্যাল দুর্বল।',
       );
     }
 
+    // On Android 10+ the plugin only *registers a suggestion*; a `true` here
+    // means Android accepted the suggestion, not that we joined anything.
+    // The radio may still be sitting on the old network, or waiting for the
+    // user to approve the suggestion notification. Confirm before believing.
+    if (!await _waitForAssociation(ssid)) {
+      throw WifiException(
+        'ফোনটি $ssid-এ যুক্ত হয়নি। অ্যান্ড্রয়েড অনুমতি চাইলে '
+        'নোটিফিকেশন থেকে "Allow"/"অনুমতি দিন" চাপুন, তারপর আবার চেষ্টা করুন।',
+      );
+    }
+
     await _bindWithRetry(ssid);
+  }
+
+  /// Polls until the radio actually reports [ssid], or gives up.
+  ///
+  /// Comparison is case-insensitive: we asked for the on-air spelling, but
+  /// some ROMs echo the SSID back with different quoting.
+  Future<bool> _waitForAssociation(String ssid) async {
+    final want = WifiNetwork.normalizeSsid(ssid);
+    final deadline = DateTime.now().add(const Duration(seconds: 25));
+
+    while (DateTime.now().isBefore(deadline)) {
+      final current = await currentSsid();
+      if (current != null && WifiNetwork.normalizeSsid(current) == want) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    }
+    return false;
   }
 
   Future<void> _bindWithRetry(String ssid) async {
@@ -216,9 +261,22 @@ class WifiConnector {
     }
   }
 
-  Future<T?> _safe<T>(Future<T> Function() action) async {
+  /// Runs a best-effort platform call. Never throws, and never hangs.
+  ///
+  /// The timeout is not decoration. On a Unisoc Android 11 handset
+  /// `bindToWifi` returned no result at all — ConnectivityManager delivered
+  /// neither `onAvailable` nor `onUnavailable` — so the awaiting Future
+  /// stayed pending forever and the UI sat on "কানেক্ট হচ্ছে" with no error
+  /// and no way out. An unbounded platform call is a hang waiting to happen.
+  Future<T?> _safe<T>(
+    Future<T> Function() action, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
     try {
-      return await action();
+      return await action().timeout(timeout);
+    } on TimeoutException {
+      debugPrint('wifi op timed out after ${timeout.inSeconds}s');
+      return null;
     } catch (e) {
       debugPrint('wifi op ignored: $e');
       return null;

@@ -51,7 +51,29 @@ class NearbyNetwork {
   /// RSSI in dBm, e.g. -55. Lower is weaker.
   final int level;
 
-  const NearbyNetwork({required this.network, required this.level});
+  /// The SSID exactly as the radio reported it, capitals and all.
+  ///
+  /// Matching a scan result against the saved list is deliberately
+  /// case-insensitive (see [WifiNetwork.normalizeSsid]) — whoever types the
+  /// network into the admin panel rarely reproduces the router's capitals.
+  /// Joining is the opposite: an SSID is a byte string, so Android will never
+  /// associate with `supti & oveek` when the access point announces
+  /// `Supti & oveek`. Connecting with the database's spelling therefore fails
+  /// silently, which is exactly what happened on the first real handset.
+  ///
+  /// So we keep what was actually on the air and connect with that.
+  final String? onAirSsid;
+
+  const NearbyNetwork({
+    required this.network,
+    required this.level,
+    this.onAirSsid,
+  });
+
+  /// The SSID to hand to Android. Falls back to the stored spelling when the
+  /// network was not seen in a scan (manual connect from the saved list).
+  String get connectSsid =>
+      (onAirSsid != null && onAirSsid!.isNotEmpty) ? onAirSsid! : network.ssid;
 
   /// 0-4 bars.
   int get bars {

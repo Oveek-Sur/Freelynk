@@ -154,7 +154,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         disabled: conn.isBusy,
                         onConnect: () => ref
                             .read(connectionProvider.notifier)
-                            .connectTo(n.network),
+                            .connectTo(n.network, onAirSsid: n.onAirSsid),
                       ),
                     ),
                   ),

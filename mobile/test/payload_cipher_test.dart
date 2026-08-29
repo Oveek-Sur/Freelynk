@@ -101,5 +101,36 @@ void main() {
       expect(const NearbyNetwork(network: net, level: -85).bars, 1);
       expect(const NearbyNetwork(network: net, level: -95).bars, 0);
     });
+
+    test('joins with the SSID the radio broadcast, not the stored one', () {
+      // Found on a real handset: the admin panel held "supti & oveek" while
+      // the router announced "Supti & oveek". Matching is case-insensitive so
+      // the network showed up in the list, but Android compares SSIDs byte
+      // for byte, so every connect attempt silently went nowhere.
+      final saved = WifiNetwork.fromJson({
+        'ssid': 'supti & oveek',
+        'name': 'Home',
+      });
+      const onAir = 'Supti & oveek';
+
+      // It still matches the scan result...
+      expect(saved.key, WifiNetwork.normalizeSsid(onAir));
+
+      // ...but we must hand Android the broadcast spelling.
+      final seen = NearbyNetwork(network: saved, level: -50, onAirSsid: onAir);
+      expect(seen.connectSsid, onAir);
+      expect(seen.connectSsid, isNot(saved.ssid));
+    });
+
+    test('falls back to the stored SSID when the network was not scanned', () {
+      final saved = WifiNetwork.fromJson({'ssid': 'Cafe_5G', 'name': ''});
+
+      expect(NearbyNetwork(network: saved, level: -50).connectSsid, 'Cafe_5G');
+      // An empty reading must not blank out the SSID we do have.
+      expect(
+        NearbyNetwork(network: saved, level: -50, onAirSsid: '').connectSsid,
+        'Cafe_5G',
+      );
+    });
   });
 }

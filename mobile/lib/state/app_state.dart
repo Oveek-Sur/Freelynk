@@ -351,7 +351,12 @@ class ConnectionController extends StateNotifier<ConnectionState> {
       );
 
       try {
-        await _wifi.connect(candidate.network);
+        // Join with the spelling the radio just reported, not the one typed
+        // into the admin panel — Android matches SSIDs byte for byte.
+        await _wifi.connect(
+          candidate.network,
+          onAirSsid: candidate.onAirSsid,
+        );
       } catch (_) {
         continue; // try the next one
       }
@@ -380,7 +385,7 @@ class ConnectionController extends StateNotifier<ConnectionState> {
 
   // ------------------------------------------------------- manual connect
 
-  Future<void> connectTo(WifiNetwork network) async {
+  Future<void> connectTo(WifiNetwork network, {String? onAirSsid}) async {
     if (state.isBusy) return;
 
     state = state.copyWith(
@@ -399,8 +404,17 @@ class ConnectionController extends StateNotifier<ConnectionState> {
       message: 'কানেক্ট করছি: ${network.displayName}…',
     );
 
+    // Prefer the caller's reading, then anything the last scan saw. Falling
+    // back to the stored SSID is a last resort: it only works when the admin
+    // panel's capitalisation happens to match the router's.
+    final onAir = onAirSsid ??
+        state.nearby
+            .where((n) => n.network.key == network.key)
+            .map((n) => n.onAirSsid)
+            .firstWhere((s) => s != null, orElse: () => null);
+
     try {
-      await _wifi.connect(network);
+      await _wifi.connect(network, onAirSsid: onAir);
     } on WifiException catch (e) {
       if (!mounted) return;
       state = state.copyWith(phase: ConnectionPhase.failed, message: e.message);
