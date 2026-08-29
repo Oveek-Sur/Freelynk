@@ -1,6 +1,7 @@
 package com.freelynk.app
 
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -130,8 +131,75 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // ------------------------------------------- keep alive
+                "startKeepAlive" -> {
+                    try {
+                        ConnectionService.start(this, call.argument<String>("ssid"))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "could not start the keep-alive service", e)
+                        result.success(false)
+                    }
+                }
+
+                "stopKeepAlive" -> {
+                    try {
+                        ConnectionService.stop(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "could not stop the keep-alive service", e)
+                        result.success(false)
+                    }
+                }
+
+                // Whether the OS has agreed to leave us alone. Vendor power
+                // managers are the usual reason a foreground service still
+                // dies overnight, and only the user can grant this.
+                "isBatteryUnrestricted" -> {
+                    result.success(isIgnoringBatteryOptimizations())
+                }
+
+                "requestBatteryUnrestricted" -> {
+                    result.success(requestIgnoreBatteryOptimizations())
+                }
+
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        return try {
+            val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            pm.isIgnoringBatteryOptimizations(packageName)
+        } catch (e: Exception) {
+            Log.w(TAG, "battery optimisation state unreadable", e)
+            false
+        }
+    }
+
+    /**
+     * Opens the OS dialog asking to be exempt from battery optimisation.
+     *
+     * Deliberately uses the settings screen rather than
+     * ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS with a package: uri, which
+     * Play policy treats as a violation for most apps. The user stays in
+     * control either way.
+     */
+    private fun requestIgnoreBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        if (isIgnoringBatteryOptimizations()) return true
+
+        return try {
+            startActivity(
+                Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "could not open battery optimisation settings", e)
+            false
         }
     }
 

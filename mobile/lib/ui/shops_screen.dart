@@ -7,13 +7,30 @@ import '../data/content.dart';
 import '../state/app_state.dart';
 
 /// Partner shops. Needs a live connection — this is not cached offline.
-class ShopsScreen extends ConsumerWidget {
+class ShopsScreen extends ConsumerStatefulWidget {
   const ShopsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShopsScreen> createState() => _ShopsScreenState();
+}
+
+class _ShopsScreenState extends ConsumerState<ShopsScreen> {
+  final _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final content = ref.watch(contentProvider);
-    final shops = content.shops;
+    final all = content.shops;
+    final shops = _query.trim().isEmpty
+        ? all
+        : all.where((s) => s.matches(_query)).toList();
 
     return Scaffold(
       body: Container(
@@ -21,7 +38,18 @@ class ShopsScreen extends ConsumerWidget {
         child: SafeArea(
           child: Column(
             children: [
-              _Bar(count: shops.length),
+              _Bar(
+                count: all.length,
+                showing: _query.trim().isEmpty ? null : shops.length,
+              ),
+
+              // Only worth showing once there is enough to sift through.
+              if (all.length > 1)
+                _SearchField(
+                  controller: _controller,
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () =>
@@ -32,6 +60,7 @@ class ShopsScreen extends ConsumerWidget {
                     shops: shops,
                     loading: content.loading,
                     error: content.error,
+                    query: _query.trim(),
                   ),
                 ),
               ),
@@ -43,16 +72,87 @@ class ShopsScreen extends ConsumerWidget {
   }
 }
 
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  const _SearchField({required this.controller, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasText = controller.text.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, size: 19, color: AppColors.foam),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                onChanged: onChanged,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(fontSize: 14, color: AppColors.text),
+                cursorColor: AppColors.foam,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: 'দোকান বা যা লাগবে লিখুন…',
+                  hintStyle: TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textFaint,
+                  ),
+                  contentPadding: EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
+            ),
+            if (hasText)
+              IconButton(
+                onPressed: () {
+                  controller.clear();
+                  onChanged('');
+                  FocusScope.of(context).unfocus();
+                },
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.textFaint,
+                ),
+                splashRadius: 18,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Body extends StatelessWidget {
   final List<Shop> shops;
   final bool loading;
   final String? error;
 
-  const _Body({required this.shops, required this.loading, required this.error});
+  /// Non-empty when the list was filtered, so an empty result can say
+  /// "nothing matched" instead of "no shops exist".
+  final String query;
+
+  const _Body({
+    required this.shops,
+    required this.loading,
+    required this.error,
+    this.query = '',
+  });
 
   @override
   Widget build(BuildContext context) {
     if (shops.isEmpty) {
+      final searching = query.isNotEmpty;
+
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
@@ -62,19 +162,23 @@ class _Body extends StatelessWidget {
             child: Column(
               children: [
                 Icon(
-                  loading
-                      ? Icons.hourglass_empty_rounded
-                      : error != null
-                          ? Icons.wifi_off_rounded
-                          : Icons.storefront_outlined,
+                  searching
+                      ? Icons.search_off_rounded
+                      : loading
+                          ? Icons.hourglass_empty_rounded
+                          : error != null
+                              ? Icons.wifi_off_rounded
+                              : Icons.storefront_outlined,
                   size: 32,
                   color: AppColors.textFaint,
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  loading
-                      ? 'লোড হচ্ছে…'
-                      : error ?? 'এখনো কোনো পার্টনার দোকান যোগ করা হয়নি।',
+                  searching
+                      ? '"$query" দিয়ে কিছু পাওয়া যায়নি।'
+                      : loading
+                          ? 'লোড হচ্ছে…'
+                          : error ?? 'এখনো কোনো পার্টনার দোকান যোগ করা হয়নি।',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 13,
@@ -82,7 +186,14 @@ class _Body extends StatelessWidget {
                     height: 1.6,
                   ),
                 ),
-                if (error != null) ...[
+                if (searching) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'দোকানের নাম, ঠিকানা বা যা বিক্রি হয় — যেকোনোটা লিখে দেখুন।',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+                  ),
+                ] else if (error != null) ...[
                   const SizedBox(height: 8),
                   const Text(
                     'দোকানের তালিকা দেখতে ইন্টারনেট দরকার।',
@@ -251,7 +362,10 @@ class _ImageFallback extends StatelessWidget {
 class _Bar extends StatelessWidget {
   final int count;
 
-  const _Bar({required this.count});
+  /// How many survived the search. Null when nothing is being filtered.
+  final int? showing;
+
+  const _Bar({required this.count, this.showing});
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +393,11 @@ class _Bar extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  count == 0 ? 'ইন্টারনেট প্রয়োজন' : '$count টি দোকান',
+                  count == 0
+                      ? 'ইন্টারনেট প্রয়োজন'
+                      : showing == null
+                          ? '$count টি দোকান'
+                          : '$count টির মধ্যে $showing টি',
                   style: const TextStyle(
                     fontSize: 11.5,
                     color: AppColors.textFaint,

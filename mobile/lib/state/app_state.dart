@@ -6,11 +6,13 @@ import '../data/content.dart';
 import '../data/content_repository.dart';
 import '../data/network_repository.dart';
 import '../data/wifi_network.dart';
+import '../services/keep_alive.dart';
 import '../services/wifi_connector.dart';
 
 final repositoryProvider = Provider((_) => NetworkRepository());
 final connectorProvider = Provider((_) => WifiConnector());
 final contentRepositoryProvider = Provider((_) => ContentRepository());
+final keepAliveProvider = Provider((_) => KeepAlive());
 
 // ============================================================ content
 
@@ -180,6 +182,25 @@ class ConnectionController extends StateNotifier<ConnectionState> {
   final Ref _ref;
   Timer? _watchdog;
 
+  KeepAlive get _keepAlive => _ref.read(keepAliveProvider);
+
+  /// Tracks what we last told the service, so a connection that survives for
+  /// hours does not restart the service on every six-second tick.
+  String? _keepAliveSsid;
+
+  /// Holds the process open while we are on a network, and lets go the moment
+  /// we are not. Safe to call repeatedly.
+  void _syncKeepAlive(String? ssid) {
+    if (ssid == _keepAliveSsid) return;
+    _keepAliveSsid = ssid;
+
+    if (ssid == null) {
+      unawaited(_keepAlive.stop());
+    } else {
+      unawaited(_keepAlive.start(ssid));
+    }
+  }
+
   /// Ticks since the last reachability probe. Checking the SSID is free;
   /// hitting the network every 6s would burn battery and mobile data.
   int _ticksSinceProbe = 0;
@@ -196,6 +217,9 @@ class ConnectionController extends StateNotifier<ConnectionState> {
   @override
   void dispose() {
     _watchdog?.cancel();
+    // Deliberately does NOT stop the keep-alive service. The whole point is
+    // that closing the UI leaves the connection up; only the user ends it,
+    // from the notification, from Disconnect, or by uninstalling.
     super.dispose();
   }
 
@@ -210,6 +234,8 @@ class ConnectionController extends StateNotifier<ConnectionState> {
 
     if (ssid == null) {
       _ticksSinceProbe = 0;
+      // Nothing to hold the process open for any more.
+      _syncKeepAlive(null);
       if (state.phase == ConnectionPhase.connected) {
         state = state.copyWith(
           phase: ConnectionPhase.idle,
@@ -223,6 +249,8 @@ class ConnectionController extends StateNotifier<ConnectionState> {
 
     final known = _saved.any((n) => n.key == WifiNetwork.normalizeSsid(ssid));
     if (!known) return;
+
+    _syncKeepAlive(ssid);
 
     // The SSID reading above is local and cheap. Only reach out to the
     // network occasionally, or the moment we notice a different SSID.
@@ -366,6 +394,7 @@ class ConnectionController extends StateNotifier<ConnectionState> {
       if (!mounted) return;
 
       if (online) {
+        _syncKeepAlive(candidate.connectSsid);
         state = state.copyWith(
           phase: ConnectionPhase.connected,
           ssid: candidate.network.ssid,
@@ -432,6 +461,8 @@ class ConnectionController extends StateNotifier<ConnectionState> {
     final online = await _wifi.hasInternet();
     if (!mounted) return;
 
+    _syncKeepAlive(onAir ?? network.ssid);
+
     state = state.copyWith(
       phase: ConnectionPhase.connected,
       ssid: network.ssid,
@@ -443,6 +474,9 @@ class ConnectionController extends StateNotifier<ConnectionState> {
   }
 
   Future<void> disconnect() async {
+    // Let go of the process first: the user asked to stop, so the persistent
+    // notification should not outlive the tap.
+    _syncKeepAlive(null);
     await _wifi.disconnect();
     if (!mounted) return;
     state = state.copyWith(

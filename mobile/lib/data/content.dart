@@ -53,6 +53,27 @@ class Shop {
   bool get hasImage => imageUrl.trim().isNotEmpty;
   bool get hasPhone => phone.trim().isNotEmpty;
 
+  /// True when this shop answers [query].
+  ///
+  /// Searches the name, what it sells and the address together, because
+  /// someone looking for rice does not know which shop sells it — typing
+  /// "চাল" should find the grocer by its stock, not force them to know the
+  /// shop's name first.
+  ///
+  /// Every word must match *something*, so "মিরপুর চাল" narrows to a rice
+  /// seller in Mirpur rather than widening to everything in either.
+  bool matches(String query) {
+    final terms = query.toLowerCase().split(RegExp(r'\s+'))
+      ..removeWhere((t) => t.isEmpty);
+    if (terms.isEmpty) return true;
+
+    final haystack = '${name.toLowerCase()} '
+        '${sells.toLowerCase()} '
+        '${address.toLowerCase()}';
+
+    return terms.every(haystack.contains);
+  }
+
   static Shop? tryParse(Map<String, dynamic> json) {
     final name = (json['name'] as String?)?.trim() ?? '';
     if (name.isEmpty) return null;

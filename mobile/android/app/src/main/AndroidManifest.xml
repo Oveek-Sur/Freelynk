@@ -23,6 +23,25 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="33" />
 
+    <!--
+      Stay alive while holding a connection. The process owns the network
+      binding and the network suggestion, so if Android reclaims it the user
+      silently drops off the WiFi they just joined.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+        tools:targetApi="34" />
+
+    <!-- The service's notification is also its off switch, so it must show. -->
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS"
+        tools:targetApi="33" />
+
+    <!-- Vendor power managers ignore everything else. Asked for at runtime. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:label="FreeLynk"
         android:name="${applicationName}"
@@ -46,6 +65,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          stopWithTask="false" is the point of the whole exercise: swiping the
+          app out of Recents must NOT drop the user's WiFi. Only the
+          notification's stop action, Disconnect, or uninstalling ends it.
+        -->
+        <service
+            android:name=".ConnectionService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <meta-data
             android:name="flutterEmbedding"

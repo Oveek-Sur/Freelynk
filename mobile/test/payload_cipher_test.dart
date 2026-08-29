@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freelynk/core/payload_cipher.dart';
+import 'package:freelynk/data/content.dart';
 import 'package:freelynk/data/wifi_network.dart';
 
 /// This fixture was produced by the REAL server code path
@@ -120,6 +121,49 @@ void main() {
       final seen = NearbyNetwork(network: saved, level: -50, onAirSsid: onAir);
       expect(seen.connectSsid, onAir);
       expect(seen.connectSsid, isNot(saved.ssid));
+    });
+
+    test('shop search looks at the name, the stock and the address', () {
+      final grocer = Shop.tryParse({
+        'name': 'রহিম স্টোর',
+        'sells': 'চাল, ডাল, তেল',
+        'address': 'মিরপুর ১০',
+      })!;
+      final pharmacy = Shop.tryParse({
+        'name': 'Popular Pharmacy',
+        'sells': 'ওষুধ',
+        'address': 'ধানমন্ডি',
+      })!;
+
+      // By name, in either script.
+      expect(grocer.matches('রহিম'), isTrue);
+      expect(pharmacy.matches('popular'), isTrue);
+
+      // By what they sell — the whole point, since someone wanting rice does
+      // not know which shop stocks it.
+      expect(grocer.matches('চাল'), isTrue);
+      expect(pharmacy.matches('ওষুধ'), isTrue);
+      expect(pharmacy.matches('চাল'), isFalse);
+
+      // By address.
+      expect(grocer.matches('মিরপুর'), isTrue);
+
+      // Case-insensitive, and blank matches everything.
+      expect(pharmacy.matches('POPULAR'), isTrue);
+      expect(grocer.matches('   '), isTrue);
+    });
+
+    test('every search word must match, so terms narrow rather than widen', () {
+      final grocer = Shop.tryParse({
+        'name': 'রহিম স্টোর',
+        'sells': 'চাল, ডাল',
+        'address': 'মিরপুর ১০',
+      })!;
+
+      // Both words hit: one the stock, one the address.
+      expect(grocer.matches('চাল মিরপুর'), isTrue);
+      // Second word hits nothing, so the shop drops out.
+      expect(grocer.matches('চাল ধানমন্ডি'), isFalse);
     });
 
     test('falls back to the stored SSID when the network was not scanned', () {

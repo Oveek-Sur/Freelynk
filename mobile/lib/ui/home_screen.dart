@@ -22,6 +22,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Guards the one automatic scan we do once networks are known.
   bool _autoScanned = false;
 
+  /// Null until checked. False means Android may still put the app to sleep
+  /// in the background, which drops the connection despite the service.
+  bool? _batteryUnrestricted;
+  bool _batteryNoticeDismissed = false;
+
   @override
   void initState() {
     super.initState();
@@ -31,7 +36,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoScanned = true;
         ref.read(connectionProvider.notifier).scan();
       }
+      _checkBatteryRestriction();
     });
+  }
+
+  Future<void> _checkBatteryRestriction() async {
+    final ok = await ref.read(keepAliveProvider).isBatteryUnrestricted();
+    if (mounted) setState(() => _batteryUnrestricted = ok);
   }
 
   Future<void> _refresh() async {
@@ -96,6 +107,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     text: library.notice!,
                     onDismiss: () =>
                         ref.read(libraryProvider.notifier).dismissNotice(),
+                  ),
+
+                // A foreground service is not enough on handsets whose vendor
+                // ships its own power manager. Only the user can lift that.
+                if (_batteryUnrestricted == false && !_batteryNoticeDismissed)
+                  _BatteryNotice(
+                    onFix: () async {
+                      await ref
+                          .read(keepAliveProvider)
+                          .requestBatteryUnrestricted();
+                      await _checkBatteryRestriction();
+                    },
+                    onDismiss: () =>
+                        setState(() => _batteryNoticeDismissed = true),
                   ),
 
                 const SizedBox(height: 8),
@@ -495,6 +520,73 @@ class _Notice extends StatelessWidget {
               child: Text(
                 text,
                 style: const TextStyle(fontSize: 12.5, color: AppColors.textDim),
+              ),
+            ),
+            IconButton(
+              onPressed: onDismiss,
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close_rounded, color: AppColors.textFaint),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Offers to lift the OS battery restriction.
+///
+/// Shown only when Android says the app is still being managed, and only
+/// until dismissed — a warning the user cannot silence becomes noise.
+class _BatteryNotice extends StatelessWidget {
+  final Future<void> Function() onFix;
+  final VoidCallback onDismiss;
+
+  const _BatteryNotice({required this.onFix, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: GlassCard(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        borderColor: AppColors.amber.withValues(alpha: 0.3),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.battery_alert_rounded,
+              size: 17,
+              color: AppColors.amber,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'ফোন অ্যাপটিকে ব্যাকগ্রাউন্ডে বন্ধ করে দিতে পারে, '
+                    'তাতে সংযোগ কেটে যাবে।',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textDim,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: onFix,
+                    child: const Text(
+                      'সেটিংসে গিয়ে অনুমতি দিন',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.amber,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             IconButton(
