@@ -1,6 +1,7 @@
 # FreeLynk
 
-Offline-first WiFi access app. **No login, no payments, no subscriptions.**
+An application which helps people connect to WiFi — offline-first, with
+**no login, no payments, no subscriptions.**
 
 You add WiFi networks from a web admin panel. The phone app downloads them
 as an encrypted blob, keeps that blob on disk, and connects — online or not.
