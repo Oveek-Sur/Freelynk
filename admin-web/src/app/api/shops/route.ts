@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
 import { TAG_CONTENT } from "@/lib/cache";
-import { clean, safePhone } from "@/lib/validate";
+import { clean, safeImageUrl, safePhone } from "@/lib/validate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,11 +43,19 @@ export async function POST(req: Request) {
     );
   }
 
+  const imageUrl = safeImageUrl(clean(body.image_url));
+  if (imageUrl === null) {
+    return NextResponse.json(
+      { error: "ছবির লিংক https:// দিয়ে শুরু হতে হবে।" },
+      { status: 400 },
+    );
+  }
+
   const { data, error } = await db()
     .from("shops")
     .insert({
       name,
-      image_url: clean(body.image_url),
+      image_url: imageUrl,
       sells: clean(body.sells),
       address: clean(body.address),
       phone,

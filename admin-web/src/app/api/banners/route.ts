@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
 import { TAG_CONTENT } from "@/lib/cache";
-import { clean, safeLink } from "@/lib/validate";
+import { clean, safeImageUrl, safeLink } from "@/lib/validate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +30,13 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
 
-  const imageUrl = clean(body.image_url);
+  const imageUrl = safeImageUrl(clean(body.image_url));
+  if (imageUrl === null) {
+    return NextResponse.json(
+      { error: "ছবির লিংক https:// দিয়ে শুরু হতে হবে।" },
+      { status: 400 },
+    );
+  }
   if (!imageUrl) {
     return NextResponse.json({ error: "ব্যানারের ছবি দিতে হবে।" }, { status: 400 });
   }

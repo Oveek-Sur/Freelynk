@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { db, removeStoredImage, type Shop } from "@/lib/db";
+import { db } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
 import { TAG_CONTENT } from "@/lib/cache";
-import { safePhone } from "@/lib/validate";
+import { safeImageUrl, safePhone } from "@/lib/validate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +22,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (typeof body.name === "string" && body.name.trim()) {
     patch.name = body.name.trim();
   }
-  if (typeof body.image_url === "string") patch.image_url = body.image_url.trim();
+  if (typeof body.image_url === "string") {
+    const image = safeImageUrl(body.image_url.trim());
+    if (image === null) {
+      return NextResponse.json(
+        { error: "ছবির লিংক https:// দিয়ে শুরু হতে হবে।" },
+        { status: 400 },
+      );
+    }
+    patch.image_url = image;
+  }
   if (typeof body.sells === "string") patch.sells = body.sells.trim();
   if (typeof body.address === "string") patch.address = body.address.trim();
   if (typeof body.phone === "string") {
@@ -42,16 +51,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "কিছু পরিবর্তন করা হয়নি।" }, { status: 400 });
   }
 
-  let previousImage: string | null = null;
-  if (typeof patch.image_url === "string" && patch.image_url) {
-    const { data } = await db()
-      .from("shops")
-      .select("image_url")
-      .eq("id", id)
-      .single();
-    previousImage = (data as Pick<Shop, "image_url"> | null)?.image_url ?? null;
-  }
-
+  // Nothing to clean up when the image changes: we only ever held a link,
+  // never the file. Whoever hosts it stays responsible for it.
   const { data, error } = await db()
     .from("shops")
     .update(patch)
@@ -60,10 +61,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  if (previousImage && previousImage !== patch.image_url) {
-    await removeStoredImage(previousImage);
-  }
 
   revalidateTag(TAG_CONTENT);
 
@@ -77,17 +74,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const { id } = await ctx.params;
 
-  const { data: row } = await db()
-    .from("shops")
-    .select("image_url")
-    .eq("id", id)
-    .single();
-
   const { error } = await db().from("shops").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  const image = (row as Pick<Shop, "image_url"> | null)?.image_url;
-  if (image) await removeStoredImage(image);
 
   revalidateTag(TAG_CONTENT);
 

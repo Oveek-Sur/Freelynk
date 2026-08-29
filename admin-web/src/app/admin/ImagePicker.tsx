@@ -1,94 +1,159 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Uploads straight to /api/upload and hands back the public URL.
+ * Takes a public image address rather than a file.
  *
- * Upload happens on pick rather than on form submit, so a slow upload
- * never blocks saving and the admin sees the real image before saving.
+ * Nothing is uploaded or stored: the picture stays wherever it already
+ * lives, so the project never pays to serve it and the storage bucket never
+ * fills up. The cost of that is trusting a link, which is why the preview
+ * exists — press it and you see exactly what a phone would see before the
+ * row is ever saved.
+ *
+ * https only. Android blocks cleartext traffic at this app's target SDK, so
+ * an http:// image would preview fine in this browser and then be broken on
+ * every handset. Better to refuse it here than to ship it.
  */
 export default function ImagePicker({
   value,
-  folder,
   onChange,
-  label = "ছবি",
+  label = "ছবির লিংক",
   aspect = "aspect-[16/9]",
 }: {
   value: string;
-  folder: "banners" | "shops";
   onChange: (url: string) => void;
   label?: string;
   aspect?: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [shown, setShown] = useState(value);
+  const [state, setState] = useState<"idle" | "loading" | "ok" | "bad">(
+    value ? "ok" : "idle",
+  );
   const [error, setError] = useState<string | null>(null);
 
-  async function pick(file: File) {
-    setBusy(true);
+  // Keep up when the parent swaps rows (editing a different banner).
+  useEffect(() => {
+    setDraft(value);
+    setShown(value);
+    setState(value ? "ok" : "idle");
     setError(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("folder", folder);
+  }, [value]);
 
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error ?? "আপলোড ব্যর্থ হয়েছে।");
-
-      onChange(json.url as string);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "আপলোড ব্যর্থ হয়েছে।");
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
+  function preview() {
+    const raw = draft.trim();
+    if (!raw) {
+      setError("লিংকটি দিন।");
+      return;
     }
+
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      setError("এটি একটি সম্পূর্ণ লিংক নয়। https:// দিয়ে শুরু করুন।");
+      setState("bad");
+      return;
+    }
+
+    if (url.protocol !== "https:") {
+      setError(
+        "https:// লিংক দিতে হবে। http:// ছবি ফোনে দেখা যাবে না, " +
+          "যদিও এই পাতায় দেখা যেতে পারে।",
+      );
+      setState("bad");
+      return;
+    }
+
+    setError(null);
+    setState("loading");
+    setShown(url.toString());
   }
+
+  const dirty = draft.trim() !== shown;
 
   return (
     <div>
       <label className="label">{label}</label>
 
+      <div className="flex gap-2">
+        <input
+          className="field flex-1"
+          value={draft}
+          placeholder="https://example.com/banner.jpg"
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              preview();
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={preview}
+          className="btn-ghost !px-3 !py-1.5 !text-xs whitespace-nowrap"
+        >
+          প্রিভিউ
+        </button>
+      </div>
+
       <div
-        className={`${aspect} relative overflow-hidden rounded-xl border border-dashed border-sky-300/25 bg-sky-400/5`}
+        className={`${aspect} relative mt-2 overflow-hidden rounded-xl border border-dashed border-sky-300/25 bg-sky-400/5`}
       >
-        {value ? (
-          // Supabase storage host is not in next.config images, and these are
-          // small adverts — a plain <img> avoids the optimiser round-trip.
+        {shown ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={value}
+            key={shown}
+            src={shown}
             alt=""
             className="h-full w-full object-cover"
+            onLoad={() => setState("ok")}
+            onError={() => {
+              setState("bad");
+              setError(
+                "ছবিটি লোড হয়নি। লিংকটি সবার জন্য খোলা কিনা দেখুন — " +
+                  "কিছু সাইট (যেমন Google Drive) সরাসরি ছবি দেখায় না।",
+              );
+            }}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-sky-200/40">
-            কোনো ছবি নেই
+            লিংক দিয়ে প্রিভিউ চাপুন
           </div>
         )}
 
-        {busy && (
+        {state === "loading" && (
           <div className="absolute inset-0 grid place-items-center bg-slate-950/70 text-xs text-sky-200">
-            আপলোড হচ্ছে…
+            দেখা হচ্ছে…
           </div>
         )}
       </div>
 
-      <div className="mt-2 flex gap-2">
+      <div className="mt-2 flex items-center gap-2">
         <button
           type="button"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-          className="btn-ghost !px-3 !py-1.5 !text-xs"
+          disabled={state !== "ok" || !dirty}
+          onClick={() => onChange(draft.trim())}
+          className="btn-ghost !px-3 !py-1.5 !text-xs disabled:!opacity-40"
         >
-          {value ? "ছবি বদলান" : "ছবি বাছুন"}
+          {dirty ? "এই ছবিটি রাখুন" : "রাখা হয়েছে"}
         </button>
-        {value && (
+
+        {shown && (
           <button
             type="button"
-            disabled={busy}
-            onClick={() => onChange("")}
+            onClick={() => {
+              setDraft("");
+              setShown("");
+              setState("idle");
+              setError(null);
+              onChange("");
+            }}
             className="btn-ghost !border-rose-400/25 !px-3 !py-1.5 !text-xs !text-rose-200 hover:!bg-rose-500/10"
           >
             সরান
@@ -96,20 +161,16 @@ export default function ImagePicker({
         )}
       </div>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) pick(f);
-        }}
-      />
-
       {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+
+      {state === "ok" && !dirty && shown && (
+        <p className="mt-2 text-xs text-emerald-300">
+          ছবিটি দেখা যাচ্ছে — ফোনেও এভাবেই আসবে।
+        </p>
+      )}
+
       <p className="mt-1 text-[11px] text-sky-200/35">
-        JPG / PNG / WEBP / GIF · সর্বোচ্চ ৫ MB
+        ছবি এখানে জমা হয় না, লিংক থেকেই দেখানো হয় · https:// হতে হবে
       </p>
     </div>
   );

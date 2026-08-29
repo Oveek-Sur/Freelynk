@@ -21,6 +21,27 @@ export function safeLink(raw: string): string | null {
   }
 }
 
+/**
+ * An image address the phone will actually be able to load.
+ *
+ * Stricter than [safeLink] on purpose: it demands https. The app targets
+ * SDK 34, where Android blocks cleartext traffic by default, so an http://
+ * image previews perfectly in the admin's browser and then shows up broken
+ * on every phone. Refusing it here is the only place that mismatch can be
+ * caught before it ships.
+ *
+ * Returns "" for empty, the normalised URL when usable, null to reject.
+ */
+export function safeImageUrl(raw: string): string | null {
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Digits, spaces, +, -, ( ) only — keeps `tel:` links well-formed. */
 export function safePhone(raw: string): string | null {
   if (!raw) return "";

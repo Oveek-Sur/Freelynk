@@ -134,9 +134,8 @@ export default function ShopManager({
           <div className="space-y-4">
             <ImagePicker
               value={draft.image_url}
-              folder="shops"
               onChange={(url) => setDraft({ ...draft, image_url: url })}
-              label="দোকানের ছবি"
+              label="দোকানের ছবির লিংক"
               aspect="aspect-[4/3]"
             />
 

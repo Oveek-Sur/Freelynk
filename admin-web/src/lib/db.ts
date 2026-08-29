@@ -38,30 +38,16 @@ export type Shop = {
   updated_at: string;
 };
 
-export const MEDIA_BUCKET = "media";
-
-/**
- * Turns a public storage URL back into the object path so deleted rows
- * don't leave their images behind, slowly filling the bucket.
- * Returns null for empty values or URLs from somewhere else.
+/*
+ * Image hosting used to live here.
+ *
+ * Pictures were uploaded into a Supabase bucket and served from it, which
+ * meant the project paid egress every time a phone drew a banner — for
+ * files up to 5 MB that were never resized. Banners and shop photos are
+ * now plain https links to wherever they already live, so there is nothing
+ * to store, nothing to clean up when a row is deleted, and no bandwidth
+ * bill that grows with the number of installs.
  */
-export function storagePathFromUrl(url: string): string | null {
-  if (!url) return null;
-  const marker = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
-  const at = url.indexOf(marker);
-  return at === -1 ? null : decodeURIComponent(url.slice(at + marker.length));
-}
-
-/** Best-effort image cleanup. A failure here must never fail the request. */
-export async function removeStoredImage(url: string): Promise<void> {
-  const path = storagePathFromUrl(url);
-  if (!path) return;
-  try {
-    await db().storage.from(MEDIA_BUCKET).remove([path]);
-  } catch {
-    // orphaned file is not worth failing a delete over
-  }
-}
 
 let cached: SupabaseClient | null = null;
 

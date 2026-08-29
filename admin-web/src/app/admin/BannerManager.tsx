@@ -124,9 +124,8 @@ export default function BannerManager({
           <div className="space-y-4">
             <ImagePicker
               value={draft.image_url}
-              folder="banners"
               onChange={(url) => setDraft({ ...draft, image_url: url })}
-              label="ব্যানার ছবি *"
+              label="ব্যানার ছবির লিংক *"
             />
 
             <div>
