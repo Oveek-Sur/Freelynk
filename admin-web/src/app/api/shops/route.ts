@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
-import { currentAdmin } from "@/lib/auth";
+import { currentStaff } from "@/lib/auth";
 import { TAG_CONTENT } from "@/lib/cache";
 import { clean, safeImageUrl, safePhone } from "@/lib/validate";
 
@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!(await currentAdmin())) {
+  if (!(await currentStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await currentAdmin())) {
+  if (!(await currentStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

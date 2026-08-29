@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
-import { currentAdmin } from "@/lib/auth";
+import { currentStaff } from "@/lib/auth";
 import { TAG_CONTENT } from "@/lib/cache";
 import { safeImageUrl, safePhone } from "@/lib/validate";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
-  if (!(await currentAdmin())) {
+  if (!(await currentStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -68,7 +68,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 }
 
 export async function DELETE(_req: Request, ctx: Ctx) {
-  if (!(await currentAdmin())) {
+  if (!(await currentStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

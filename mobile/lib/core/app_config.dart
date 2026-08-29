@@ -30,10 +30,17 @@ class AppConfig {
     defaultValue: 'replace-me-with-your-SYNC_SECRET',
   );
 
+  /// Shown in the admin panel's usage figures, so a rollout can be told
+  /// apart from the version it replaced. Keep in step with pubspec.
+  static const String version = '2.0.0';
+
   static Uri get syncUrl => Uri.parse('$baseUrl/api/sync');
 
   /// Banners and partner shops. Plain JSON, needs a live connection.
   static Uri get contentUrl => Uri.parse('$baseUrl/api/content');
+
+  /// "This device was used today", sent at most once a day.
+  static Uri get pingUrl => Uri.parse('$baseUrl/api/ping');
 
   static bool get isConfigured =>
       !clientKey.startsWith('replace-me') && !syncSecret.startsWith('replace-me');

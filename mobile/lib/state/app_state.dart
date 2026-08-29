@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/content.dart';
 import '../data/content_repository.dart';
 import '../data/network_repository.dart';
+import '../data/usage_reporter.dart';
 import '../data/wifi_network.dart';
 import '../services/keep_alive.dart';
 import '../services/wifi_connector.dart';
@@ -107,6 +108,10 @@ class LibraryController extends StateNotifier<LibraryState> {
       loading: false,
     );
     unawaited(refresh(silent: true));
+
+    // Fire and forget: it must never delay the list appearing, and a
+    // statistic failing to file is not the user's problem.
+    unawaited(UsageReporter().reportIfNewDay());
   }
 
   Future<void> refresh({bool silent = false}) async {

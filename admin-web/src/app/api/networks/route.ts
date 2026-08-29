@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
-import { currentAdmin } from "@/lib/auth";
+import { currentStaff } from "@/lib/auth";
 import { TAG_NETWORKS } from "@/lib/cache";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ function clean(v: unknown): string {
 }
 
 export async function GET() {
-  if (!(await currentAdmin())) {
+  if (!(await currentStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await currentAdmin())) {
+  if (!(await currentStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
