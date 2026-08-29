@@ -19,6 +19,12 @@ dependencies:
   http: ^1.2.1
   cryptography: ^2.7.0
 
+  # Image.network holds decoded frames in memory only, so every cold start
+  # re-downloaded every banner and shop photo. Across a large install base
+  # that is the biggest bill the project could run up, for pictures that
+  # change once a month. This keeps them on disk between launches.
+  cached_network_image: ^3.4.1
+
   # wifi
   wifi_iot: ^0.3.19
   wifi_scan: ^0.4.1+2

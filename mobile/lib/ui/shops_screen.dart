@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -245,12 +246,11 @@ class _ShopCard extends StatelessWidget {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: Image.network(
-                  shop.imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: shop.imageUrl,
                   fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) =>
-                      progress == null ? child : const _ImageFallback(),
-                  errorBuilder: (_, _, _) => const _ImageFallback(broken: true),
+                  placeholder: (_, _) => const _ImageFallback(),
+                  errorWidget: (_, _, _) => const _ImageFallback(broken: true),
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -103,14 +104,11 @@ class _BannerCarouselState extends State<BannerCarousel> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.network(
-                            banner.imageUrl,
+                          CachedNetworkImage(
+                            imageUrl: banner.imageUrl,
                             fit: BoxFit.cover,
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) return child;
-                              return const _BannerPlaceholder();
-                            },
-                            errorBuilder: (_, _, _) =>
+                            placeholder: (_, _) => const _BannerPlaceholder(),
+                            errorWidget: (_, _, _) =>
                                 const _BannerPlaceholder(broken: true),
                           ),
                           if (banner.title.isNotEmpty)
