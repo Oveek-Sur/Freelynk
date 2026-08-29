@@ -1,0 +1,57 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { currentAdmin } from "@/lib/auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type Ctx = { params: Promise<{ id: string }> };
+
+export async function PATCH(req: Request, ctx: Ctx) {
+  if (!(await currentAdmin())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await ctx.params;
+  const body = await req.json().catch(() => ({}));
+
+  const patch: Record<string, unknown> = {};
+  if (typeof body.name === "string") patch.name = body.name.trim();
+  if (typeof body.ssid === "string") patch.ssid = body.ssid.trim().replace(/["']/g, "");
+  if (typeof body.password === "string") patch.password = body.password;
+  if (["WPA", "WEP", "OPEN"].includes(body.security)) patch.security = body.security;
+  if (typeof body.area === "string") patch.area = body.area.trim();
+  if (typeof body.note === "string") patch.note = body.note.trim();
+  if (Number.isFinite(body.priority)) patch.priority = Number(body.priority);
+  if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "কিছু পরিবর্তন করা হয়নি।" }, { status: 400 });
+  }
+
+  const { data, error } = await db()
+    .from("networks")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    const msg = error.code === "23505" ? "এই SSID আগেই যোগ করা আছে।" : error.message;
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+
+  return NextResponse.json({ network: data });
+}
+
+export async function DELETE(_req: Request, ctx: Ctx) {
+  if (!(await currentAdmin())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await ctx.params;
+  const { error } = await db().from("networks").delete().eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}

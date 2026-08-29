@@ -1,0 +1,36 @@
+# --- secrets: never commit ---
+.env
+.env.local
+.env.*.local
+*.keystore
+*.jks
+key.properties
+
+# Captured /api/sync response — embeds the live SYNC_SECRET.
+# Regenerate with: cd admin-web && node scripts/make-fixture.mjs
+mobile/test/fixtures/
+
+# --- node / next ---
+node_modules/
+.next/
+.vercel/
+
+# --- flutter / dart ---
+.dart_tool/
+.packages
+build/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+android/local.properties
+android/.gradle/
+android/key.properties
+
+# --- editors / os ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- scratch: the original archive extraction ---
+_original/
