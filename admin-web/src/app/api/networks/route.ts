@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
+import { TAG_NETWORKS } from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +70,9 @@ export async function POST(req: Request) {
     const msg = error.code === "23505" ? "এই SSID আগেই যোগ করা আছে।" : error.message;
     return NextResponse.json({ error: msg }, { status: 400 });
   }
+
+  // Drop the cached list so the phones pick this up on their next sync.
+  revalidateTag(TAG_NETWORKS);
 
   return NextResponse.json({ network: data }, { status: 201 });
 }

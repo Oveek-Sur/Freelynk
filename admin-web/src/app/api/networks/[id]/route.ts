@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
+import { TAG_NETWORKS } from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +43,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
+  revalidateTag(TAG_NETWORKS);
+
   return NextResponse.json({ network: data });
 }
 
@@ -53,5 +57,10 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   const { error } = await db().from("networks").delete().eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // The point of the whole cache design: gone from the database means gone
+  // from every phone, without any of them polling for it.
+  revalidateTag(TAG_NETWORKS);
+
   return NextResponse.json({ ok: true });
 }

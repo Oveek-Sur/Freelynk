@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
+import { TAG_CONTENT } from "@/lib/cache";
 import { clean, safeLink } from "@/lib/validate";
 
 export const runtime = "nodejs";
@@ -54,5 +56,7 @@ export async function POST(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  revalidateTag(TAG_CONTENT);
+
   return NextResponse.json({ banner: data }, { status: 201 });
 }

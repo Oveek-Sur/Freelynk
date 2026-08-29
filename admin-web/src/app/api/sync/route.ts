@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { encryptPayload, revisionOf, safeEqual } from "@/lib/crypto";
+import { NO_STORE, publicFeedHeaders, readActiveNetworks } from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,24 +24,28 @@ export async function GET(req: Request) {
   if (!syncSecret || !clientKey) {
     return NextResponse.json(
       { error: "Server is missing SYNC_SECRET / SYNC_CLIENT_KEY." },
-      { status: 500 },
+      { status: 500, headers: NO_STORE },
     );
   }
 
   const provided = req.headers.get("x-client-key") ?? "";
   if (!safeEqual(provided, clientKey)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Forbidden" },
+      { status: 403, headers: NO_STORE },
+    );
   }
 
-  const { data, error } = await db()
-    .from("networks")
-    .select("id, name, ssid, password, security, area, note, priority, updated_at")
-    .eq("is_active", true)
-    .order("priority", { ascending: false })
-    .order("name", { ascending: true });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  let data;
+  try {
+    // Cached until an admin write bumps the tag, so the phones' traffic does
+    // not reach Postgres at all.
+    data = await readActiveNetworks();
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Database unavailable." },
+      { status: 500, headers: NO_STORE },
+    );
   }
 
   const plaintext = JSON.stringify({
@@ -60,12 +64,11 @@ export async function GET(req: Request) {
 
   const rev = revisionOf(plaintext);
 
+  const headers = publicFeedHeaders(rev);
+
   // Nothing changed since the app's last sync? Save the bandwidth.
   if (req.headers.get("if-none-match") === `"${rev}"`) {
-    return new NextResponse(null, {
-      status: 304,
-      headers: { ETag: `"${rev}"`, "Cache-Control": "no-store" },
-    });
+    return new NextResponse(null, { status: 304, headers });
   }
 
   return NextResponse.json(
@@ -74,9 +77,11 @@ export async function GET(req: Request) {
       alg: "AES-256-GCM",
       rev,
       count: data?.length ?? 0,
-      generatedAt: new Date().toISOString(),
+      // Deliberately not a timestamp. This response is cached and handed to
+      // many phones; stamping the moment it was generated would make every
+      // copy unique and defeat the point.
       data: encryptPayload(plaintext, syncSecret),
     },
-    { headers: { ETag: `"${rev}"`, "Cache-Control": "no-store" } },
+    { headers },
   );
 }

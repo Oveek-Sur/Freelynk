@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { db, removeStoredImage, type Shop } from "@/lib/db";
 import { currentAdmin } from "@/lib/auth";
+import { TAG_CONTENT } from "@/lib/cache";
 import { safePhone } from "@/lib/validate";
 
 export const runtime = "nodejs";
@@ -63,6 +65,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     await removeStoredImage(previousImage);
   }
 
+  revalidateTag(TAG_CONTENT);
+
   return NextResponse.json({ shop: data });
 }
 
@@ -84,6 +88,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const image = (row as Pick<Shop, "image_url"> | null)?.image_url;
   if (image) await removeStoredImage(image);
+
+  revalidateTag(TAG_CONTENT);
 
   return NextResponse.json({ ok: true });
 }
