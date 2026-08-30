@@ -1,10 +1,12 @@
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart' show openAppSettings;
 
 import '../core/app_config.dart';
 import '../core/theme.dart';
 import '../data/wifi_network.dart';
+import '../services/wifi_connector.dart' show BlockerFix, WifiBlocker;
 import '../state/app_state.dart';
 import 'shops_screen.dart';
 import 'widgets/banner_carousel.dart';
@@ -18,9 +20,25 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
   /// Guards the one automatic scan we do once networks are known.
   bool _autoScanned = false;
+
+  /// Retries the moment the user comes back from the settings screen.
+  ///
+  /// Opening settings returns as soon as the intent is fired, not when the
+  /// person is finished, so retrying there would run before they had
+  /// switched anything on. Waiting for the app to be resumed is the only
+  /// point at which trying again can actually succeed — otherwise they
+  /// turn location on, come back, and still see the same failure until
+  /// they think to press the button again.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (ref.read(connectionProvider).blocker == null) return;
+    ref.read(connectionProvider.notifier).scan();
+  }
 
   /// Null until checked. False means Android may still put the app to sleep
   /// in the background, which drops the connection despite the service.
@@ -28,8 +46,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _batteryNoticeDismissed = false;
 
   @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // If a cached list already exists we can scan right away.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ref.read(libraryProvider).networks.isNotEmpty) {
@@ -136,6 +161,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                 const SizedBox(height: 18),
                 _StatusLine(message: conn.message, phase: conn.phase),
+
+                // When the phone itself is in the way — location off, a
+                // permission refused — offer the screen that fixes it.
+                // Repeating the instruction after every press, with no way
+                // to act on it from here, reads as the app being broken.
+                if (conn.blocker != null &&
+                    conn.blocker!.fix != BlockerFix.none) ...[
+                  const SizedBox(height: 14),
+                  _BlockerAction(blocker: conn.blocker!),
+                ],
+
                 const SizedBox(height: 20),
 
                 _ActionRow(
@@ -529,6 +565,58 @@ class _Notice extends StatelessWidget {
               icon: const Icon(Icons.close_rounded, color: AppColors.textFaint),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A button that opens whichever settings screen unblocks a scan.
+///
+/// Android will not return WiFi scan results while the location service is
+/// off — the app cannot work around it, and the person is usually two taps
+/// away from fixing it if only they are taken there.
+class _BlockerAction extends StatelessWidget {
+  final WifiBlocker blocker;
+
+  const _BlockerAction({required this.blocker});
+
+  Future<void> _open() async {
+    switch (blocker.fix) {
+      case BlockerFix.locationService:
+        await AppSettings.openAppSettings(type: AppSettingsType.location);
+      case BlockerFix.appPermissions:
+        // permission_handler's version lands on this app's own page,
+        // rather than the top of the settings tree.
+        await openAppSettings();
+      case BlockerFix.wifi:
+        await AppSettings.openAppSettings(type: AppSettingsType.wifi);
+      case BlockerFix.none:
+        return;
+    }
+    // The retry itself happens on resume — see
+    // didChangeAppLifecycleState — because this returns as soon as the
+    // settings screen opens, long before anything has been switched on.
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TextButton.icon(
+        onPressed: _open,
+        icon: const Icon(Icons.settings_rounded, size: 18),
+        label: Text(
+          blocker.actionLabel ?? 'সেটিংস খুলুন',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.amber,
+          backgroundColor: AppColors.amber.withValues(alpha: 0.12),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: AppColors.amber.withValues(alpha: 0.3)),
+          ),
         ),
       ),
     );

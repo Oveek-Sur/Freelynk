@@ -12,11 +12,58 @@ import 'package:wifi_scan/wifi_scan.dart';
 import '../data/wifi_network.dart';
 
 /// Thrown for problems we want to show the user verbatim.
+///
+/// Carries a [fix] when the phone's own settings are the obstacle, so the
+/// UI can offer the screen that clears it. Without that, the two places
+/// that detect "location is off" — the pre-flight check and the scan
+/// itself — behaved differently: one offered a way out and the other only
+/// repeated the complaint.
 class WifiException implements Exception {
   final String message;
-  const WifiException(this.message);
+  final BlockerFix fix;
+  final String? actionLabel;
+
+  const WifiException(this.message, {this.fix = BlockerFix.none, this.actionLabel});
+
+  /// The same thing expressed as a blocker, or null when nothing can be
+  /// pressed to fix it.
+  WifiBlocker? get blocker => fix == BlockerFix.none
+      ? null
+      : WifiBlocker(message, fix: fix, actionLabel: actionLabel);
+
   @override
   String toString() => message;
+}
+
+/// Which settings screen would clear a blocker.
+enum BlockerFix {
+  /// Nothing the user can press — waiting or moving is the only cure.
+  none,
+
+  /// The location service is switched off device-wide.
+  locationService,
+
+  /// This app was refused a permission it needs.
+  appPermissions,
+
+  /// The WiFi radio is off.
+  wifi,
+}
+
+/// Something stopping a scan, and what the user can do about it.
+///
+/// A bare sentence was not enough. When the location service is off the
+/// app can do nothing at all, and repeating "turn on GPS" after every
+/// press — with no way to act on it from where the user is standing —
+/// reads as the app being broken rather than as an instruction.
+class WifiBlocker {
+  final String message;
+  final BlockerFix fix;
+
+  /// Text for the button, when there is one to press.
+  final String? actionLabel;
+
+  const WifiBlocker(this.message, {this.fix = BlockerFix.none, this.actionLabel});
 }
 
 class WifiConnector {
@@ -33,7 +80,7 @@ class WifiConnector {
   ///     is enough; GPS can stay off.
   ///
   /// So we accept either path instead of always demanding location.
-  Future<String?> ensureReady() async {
+  Future<WifiBlocker?> ensureReady() async {
     if (!Platform.isAndroid) return null;
 
     final statuses = await [
@@ -53,20 +100,40 @@ class WifiConnector {
               (statuses[Permission.nearbyWifiDevices]?.isPermanentlyDenied ??
                   false);
       return permanentlyBlocked
-          ? 'পারমিশন স্থায়ীভাবে বন্ধ আছে। সেটিংস → পারমিশন থেকে চালু করুন।'
-          : 'আশেপাশের ওয়াইফাই খুঁজতে পারমিশন দরকার।';
+          ? const WifiBlocker(
+              'পারমিশন স্থায়ীভাবে বন্ধ করা আছে। সেটিংসে গিয়ে '
+              '"Location" অনুমতি দিন।',
+              fix: BlockerFix.appPermissions,
+              actionLabel: 'অনুমতির সেটিংস খুলুন',
+            )
+          : const WifiBlocker(
+              'আশেপাশের ওয়াইফাই খুঁজতে পারমিশন দরকার।',
+              fix: BlockerFix.appPermissions,
+              actionLabel: 'অনুমতি দিন',
+            );
     }
 
-    // Only the legacy path needs the GPS toggle.
+    // Only the legacy path needs the GPS toggle. Android ties scan results
+    // to location, so with the service off the radio returns nothing at all
+    // and no amount of retrying will change that.
     if (!nearbyGranted && !await Permission.location.serviceStatus.isEnabled) {
-      return 'ওয়াইফাই স্ক্যান করতে ফোনের লোকেশন (GPS) চালু করুন।';
+      return const WifiBlocker(
+        'ওয়াইফাই খুঁজতে ফোনের লোকেশন (GPS) চালু থাকতে হয় — '
+        'অ্যান্ড্রয়েডের নিয়ম। আপনার অবস্থান কোথাও পাঠানো হয় না।',
+        fix: BlockerFix.locationService,
+        actionLabel: 'লোকেশন চালু করুন',
+      );
     }
 
     if (!await WiFiForIoTPlugin.isEnabled()) {
       await WiFiForIoTPlugin.setEnabled(true, shouldOpenSettings: true);
       await Future<void>.delayed(const Duration(seconds: 2));
       if (!await WiFiForIoTPlugin.isEnabled()) {
-        return 'ফোনের ওয়াইফাই চালু করুন।';
+        return const WifiBlocker(
+          'ফোনের ওয়াইফাই চালু করুন।',
+          fix: BlockerFix.wifi,
+          actionLabel: 'ওয়াইফাই সেটিংস',
+        );
       }
     }
 
@@ -89,9 +156,7 @@ class WifiConnector {
     if (saved.isEmpty) return (nearby: const <NearbyNetwork>[], seen: 0);
 
     final can = await WiFiScan.instance.canStartScan();
-    if (can != CanStartScan.yes) {
-      throw WifiException(_scanErrorText(can));
-    }
+    if (can != CanStartScan.yes) throw _scanError(can);
 
     // Listen before asking, or a fast radio can answer before we are ready.
     final fresh = WiFiScan.instance.onScannedResultsAvailable.first;
@@ -168,13 +233,33 @@ class WifiConnector {
     return (nearby: nearby, seen: strongest.length);
   }
 
-  String _scanErrorText(CanStartScan can) => switch (can) {
+  /// Turns a refusal into something the user can act on.
+  ///
+  /// This is the branch that actually fires on Android 11 and 12. The
+  /// pre-flight check waves them through, because permission_handler
+  /// reports NEARBY_WIFI_DEVICES as granted on versions where it does not
+  /// exist, so the location-service test it guards never runs. The refusal
+  /// then surfaces here instead — and used to arrive as bare text with no
+  /// way out of it.
+  WifiException _scanError(CanStartScan can) => switch (can) {
         CanStartScan.noLocationPermissionRequired ||
         CanStartScan.noLocationPermissionDenied =>
-          'লোকেশন পারমিশন দরকার।',
-        CanStartScan.noLocationServiceDisabled => 'লোকেশন (GPS) চালু করুন।',
-        CanStartScan.notSupported => 'এই ডিভাইসে ওয়াইফাই স্ক্যান সাপোর্ট করে না।',
-        _ => 'এখন স্ক্যান করা যাচ্ছে না, একটু পরে চেষ্টা করুন।',
+          const WifiException(
+            'আশেপাশের ওয়াইফাই খুঁজতে লোকেশন পারমিশন দরকার।',
+            fix: BlockerFix.appPermissions,
+            actionLabel: 'অনুমতি দিন',
+          ),
+        CanStartScan.noLocationServiceDisabled => const WifiException(
+            'ওয়াইফাই খুঁজতে ফোনের লোকেশন (GPS) চালু থাকতে হয় — '
+            'অ্যান্ড্রয়েডের নিয়ম। আপনার অবস্থান কোথাও পাঠানো হয় না।',
+            fix: BlockerFix.locationService,
+            actionLabel: 'লোকেশন চালু করুন',
+          ),
+        CanStartScan.notSupported =>
+          const WifiException('এই ডিভাইসে ওয়াইফাই স্ক্যান সাপোর্ট করে না।'),
+        _ => const WifiException(
+            'এখন স্ক্যান করা যাচ্ছে না, একটু পরে চেষ্টা করুন।',
+          ),
       };
 
   // -------------------------------------------------------------- connect

@@ -148,6 +148,12 @@ class ConnectionState {
   final List<NearbyNetwork> nearby;
   final bool scanning;
 
+  /// Set when something the user can fix is stopping a scan — location
+  /// switched off, a permission refused. Carried separately from [message]
+  /// so the UI can offer the button that clears it instead of only saying
+  /// what is wrong.
+  final WifiBlocker? blocker;
+
   const ConnectionState({
     this.phase = ConnectionPhase.idle,
     this.message = 'কানেক্ট করতে প্রস্তুত',
@@ -155,6 +161,7 @@ class ConnectionState {
     this.hasInternet = false,
     this.nearby = const [],
     this.scanning = false,
+    this.blocker,
   });
 
   bool get isBusy =>
@@ -170,6 +177,8 @@ class ConnectionState {
     List<NearbyNetwork>? nearby,
     bool? scanning,
     bool clearSsid = false,
+    WifiBlocker? blocker,
+    bool clearBlocker = false,
   }) {
     return ConnectionState(
       phase: phase ?? this.phase,
@@ -178,6 +187,7 @@ class ConnectionState {
       hasInternet: hasInternet ?? this.hasInternet,
       nearby: nearby ?? this.nearby,
       scanning: scanning ?? this.scanning,
+      blocker: clearBlocker ? null : (blocker ?? this.blocker),
     );
   }
 }
@@ -301,7 +311,8 @@ class ConnectionController extends StateNotifier<ConnectionState> {
         state = state.copyWith(
           scanning: false,
           phase: ConnectionPhase.failed,
-          message: blocker,
+          message: blocker.message,
+          blocker: blocker,
         );
         return;
       }
@@ -312,6 +323,7 @@ class ConnectionController extends StateNotifier<ConnectionState> {
       state = state.copyWith(
         nearby: result.nearby,
         scanning: false,
+        clearBlocker: true,
         message: result.nearby.isNotEmpty
             ? '${result.nearby.length} টি নেটওয়ার্ক পাওয়া গেছে'
             // Saying how many were seen turns "nothing happened" into an
@@ -328,6 +340,8 @@ class ConnectionController extends StateNotifier<ConnectionState> {
         scanning: false,
         phase: ConnectionPhase.failed,
         message: e.message,
+        blocker: e.blocker,
+        clearBlocker: e.blocker == null,
       );
     } catch (_) {
       if (!mounted) return;
@@ -361,20 +375,30 @@ class ConnectionController extends StateNotifier<ConnectionState> {
 
     final blocker = await _wifi.ensureReady();
     if (blocker != null) {
-      state = state.copyWith(phase: ConnectionPhase.failed, message: blocker);
+      state = state.copyWith(
+        phase: ConnectionPhase.failed,
+        message: blocker.message,
+        blocker: blocker,
+      );
       return;
     }
 
     state = state.copyWith(
       phase: ConnectionPhase.scanning,
       message: 'আশেপাশে খোঁজা হচ্ছে…',
+      clearBlocker: true,
     );
 
     late ({List<NearbyNetwork> nearby, int seen}) scan;
     try {
       scan = await _wifi.scanFor(_saved);
     } on WifiException catch (e) {
-      state = state.copyWith(phase: ConnectionPhase.failed, message: e.message);
+      state = state.copyWith(
+        phase: ConnectionPhase.failed,
+        message: e.message,
+        blocker: e.blocker,
+        clearBlocker: e.blocker == null,
+      );
       return;
     }
 
@@ -447,13 +471,18 @@ class ConnectionController extends StateNotifier<ConnectionState> {
 
     final blocker = await _wifi.ensureReady();
     if (blocker != null) {
-      state = state.copyWith(phase: ConnectionPhase.failed, message: blocker);
+      state = state.copyWith(
+        phase: ConnectionPhase.failed,
+        message: blocker.message,
+        blocker: blocker,
+      );
       return;
     }
 
     state = state.copyWith(
       phase: ConnectionPhase.connecting,
       message: 'কানেক্ট করছি: ${network.displayName}…',
+      clearBlocker: true,
     );
 
     // Prefer the caller's reading, then anything the last scan saw. Falling
