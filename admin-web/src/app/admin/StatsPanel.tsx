@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Daily = { day: string; active: number };
+type Clicks = { name: string; clicks: number };
 
 type Stats = {
   totalDevices: number;
@@ -12,6 +13,8 @@ type Stats = {
   wau: number;
   mau: number;
   daily: Daily[];
+  shopCalls?: Clicks[];
+  bannerClicks?: Clicks[];
 };
 
 const bn = (n: number) => n.toLocaleString("bn-BD");
@@ -86,6 +89,19 @@ export default function StatsPanel() {
 
       <Chart daily={stats.daily} />
 
+      <div className="grid gap-3 lg:grid-cols-2">
+        <ClickTable
+          title="দোকানে কল (৩০ দিন)"
+          empty="এখনো কেউ কল করেনি।"
+          rows={stats.shopCalls ?? []}
+        />
+        <ClickTable
+          title="ব্যানারে ক্লিক (৩০ দিন)"
+          empty="এখনো কেউ ক্লিক করেনি।"
+          rows={stats.bannerClicks ?? []}
+        />
+      </div>
+
       <div className="rounded-xl border border-sky-300/12 bg-sky-400/5 px-4 py-3">
         <p className="text-xs leading-relaxed text-sky-200/45">
           এই সংখ্যাগুলো সেই ডিভাইসের, যেগুলোতে অ্যাপ <em>খোলা</em> হয়েছে।
@@ -101,6 +117,54 @@ export default function StatsPanel() {
       <button onClick={load} disabled={busy} className="btn-ghost !text-xs">
         {busy ? "আপডেট হচ্ছে…" : "রিফ্রেশ"}
       </button>
+    </div>
+  );
+}
+
+/**
+ * What each advertiser got this month.
+ *
+ * This is the number a shop asks for when the second invoice arrives, so
+ * it is shown per advertiser rather than as one total — a grand total
+ * proves the app works, but not that *their* listing did.
+ */
+function ClickTable({
+  title,
+  empty,
+  rows,
+}: {
+  title: string;
+  empty: string;
+  rows: Clicks[];
+}) {
+  const total = rows.reduce((sum, r) => sum + r.clicks, 0);
+
+  return (
+    <div className="rounded-2xl border border-sky-300/15 bg-sky-400/5 px-4 py-4">
+      <div className="mb-3 flex items-baseline justify-between">
+        <p className="text-xs text-sky-200/50">{title}</p>
+        {rows.length > 0 && (
+          <p className="text-[11px] text-sky-200/35">মোট {bn(total)}</p>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="py-4 text-center text-xs text-sky-200/30">{empty}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.slice(0, 8).map((r) => (
+            <li
+              key={r.name}
+              className="flex items-baseline justify-between gap-3 text-sm"
+            >
+              <span className="truncate text-sky-100/85">{r.name}</span>
+              <span className="shrink-0 font-semibold tabular-nums text-sky-200">
+                {bn(r.clicks)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

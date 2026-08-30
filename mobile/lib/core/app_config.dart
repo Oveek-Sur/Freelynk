@@ -42,6 +42,9 @@ class AppConfig {
   /// "This device was used today", sent at most once a day.
   static Uri get pingUrl => Uri.parse('$baseUrl/api/ping');
 
+  /// "Somebody tapped this advert." Sent on every tap, not once a day.
+  static Uri get trackUrl => Uri.parse('$baseUrl/api/track');
+
   static bool get isConfigured =>
       !clientKey.startsWith('replace-me') && !syncSecret.startsWith('replace-me');
 }

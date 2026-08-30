@@ -66,6 +66,27 @@ create table if not exists public.app_daily (
 -- was replaced. Dropping it is the whole point of the change.
 drop table if exists public.app_activity;
 
+-- What people actually did with an advert.
+--
+-- First sale is made on a promise; the second is made on evidence. A
+-- shop that pays for a listing will ask how many people called them
+-- through the app, and without this there is no answer.
+--
+-- Counters, not events. One row per shop per day rather than one row
+-- per tap, for the same reason as app_daily: two hundred shops over a
+-- year is seventy thousand rows, while raw events at this app's
+-- intended scale would be millions a week for a number nobody reads
+-- individually.
+create table if not exists public.app_clicks (
+  kind      text    not null check (kind in ('shop_call', 'banner')),
+  target_id uuid    not null,
+  day       date    not null,
+  clicks    integer not null default 0,
+  primary key (kind, target_id, day)
+);
+
+create index if not exists app_clicks_day_idx on public.app_clicks (day desc);
+
 -- ===============================================================
 -- ROW LEVEL SECURITY
 --
@@ -75,9 +96,30 @@ drop table if exists public.app_activity;
 -- ===============================================================
 alter table public.app_devices enable row level security;
 alter table public.app_daily   enable row level security;
+alter table public.app_clicks  enable row level security;
 
 revoke all on public.app_devices from anon, authenticated;
 revoke all on public.app_daily   from anon, authenticated;
+revoke all on public.app_clicks  from anon, authenticated;
+
+-- ===============================================================
+-- RECORDING A TAP
+--
+-- No reference to shops/banners on purpose: a deleted shop's history
+-- should survive long enough to invoice for the month it ran, and a
+-- foreign key would take it away the moment the row went.
+-- ===============================================================
+create or replace function public.record_click(p_kind text, p_target uuid)
+returns void
+language sql
+as $$
+  insert into public.app_clicks (kind, target_id, day, clicks)
+  values (p_kind, p_target, (now() at time zone 'Asia/Dhaka')::date, 1)
+  on conflict (kind, target_id, day) do update
+    set clicks = public.app_clicks.clicks + 1;
+$$;
+
+revoke all on function public.record_click(text, uuid) from anon, authenticated;
 
 -- ===============================================================
 -- RECORDING A VISIT
@@ -192,6 +234,35 @@ as $$
                                order by day), '[]'::json)
       from public.app_daily
       where day > (select d from today) - 30
+    ),
+
+    -- What each advertiser got for their money this month. The join is
+    -- left from the click side, so a shop deleted mid-month still shows
+    -- what it earned while it ran — that is the month you invoice for.
+    'shopCalls', (
+      select coalesce(json_agg(json_build_object(
+               'name', coalesce(s.name, '(মুছে ফেলা দোকান)'),
+               'clicks', c.total) order by c.total desc), '[]'::json)
+      from (
+        select target_id, sum(clicks)::int as total
+        from public.app_clicks
+        where kind = 'shop_call' and day > (select d from today) - 30
+        group by target_id
+      ) c
+      left join public.shops s on s.id = c.target_id
+    ),
+
+    'bannerClicks', (
+      select coalesce(json_agg(json_build_object(
+               'name', coalesce(nullif(b.title, ''), '(শিরোনামহীন ব্যানার)'),
+               'clicks', c.total) order by c.total desc), '[]'::json)
+      from (
+        select target_id, sum(clicks)::int as total
+        from public.app_clicks
+        where kind = 'banner' and day > (select d from today) - 30
+        group by target_id
+      ) c
+      left join public.banners b on b.id = c.target_id
     )
   );
 $$;

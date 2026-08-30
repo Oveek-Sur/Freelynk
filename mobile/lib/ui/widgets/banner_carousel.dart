@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme.dart';
 import '../../data/content.dart';
+import '../../data/usage_reporter.dart';
 
 /// Swipeable banner strip. Renders nothing at all when there are no
 /// banners — the admin turning every banner off must leave no trace in
@@ -70,6 +71,10 @@ class _BannerCarouselState extends State<BannerCarousel> {
     // The server already rejects anything that isn't http(s), but the APK
     // may be talking to an older deployment, so check again here.
     if (uri.scheme != 'http' && uri.scheme != 'https') return;
+
+    // Not awaited: whether the advertiser's counter went up is not worth
+    // delaying the browser by, and it must not stop the link opening.
+    unawaited(UsageReporter().recordClick('banner', banner.id));
 
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {

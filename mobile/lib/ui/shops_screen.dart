@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme.dart';
 import '../data/content.dart';
+import '../data/usage_reporter.dart';
 import '../state/app_state.dart';
 
 /// Partner shops. Needs a live connection — this is not cached offline.
@@ -226,6 +229,11 @@ class _ShopCard extends StatelessWidget {
 
   Future<void> _call(BuildContext context) async {
     final uri = Uri(scheme: 'tel', path: shop.phone.replaceAll(' ', ''));
+
+    // This is the number the shop is paying for — "how many people rang
+    // me through the app". Not awaited: the dialler must open regardless.
+    unawaited(UsageReporter().recordClick('shop_call', shop.id));
+
     final ok = await launchUrl(uri);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

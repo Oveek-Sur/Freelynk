@@ -85,6 +85,33 @@ class UsageReporter {
     }
   }
 
+  /// Records that somebody tapped an advert.
+  ///
+  /// Unlike the daily report this fires every time, because the question
+  /// it answers is "what did this advertiser get for their money", and a
+  /// shop that was called twice was called twice.
+  ///
+  /// Fire and forget: the phone call or the browser must open whether or
+  /// not the counter was reached, so this never blocks and never throws.
+  Future<void> recordClick(String kind, String id) async {
+    if (!AppConfig.isConfigured || id.isEmpty) return;
+
+    try {
+      await _client
+          .post(
+            AppConfig.trackUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Client-Key': AppConfig.clientKey,
+            },
+            body: jsonEncode({'kind': kind, 'id': id}),
+          )
+          .timeout(const Duration(seconds: 6));
+    } catch (e) {
+      debugPrint('click not recorded: $e');
+    }
+  }
+
   /// Today's date in Dhaka, as YYYY-MM-DD.
   ///
   /// Must agree with the server, which also counts days in Asia/Dhaka —
