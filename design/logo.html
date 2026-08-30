@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8" />
+<!--
+  FreeLynk launcher icon.
+
+  Drawn as WiFi arcs rather than a monogram: at 48px on a home screen a
+  letterform says nothing, while the arcs say "this is about WiFi" before
+  the label is read. The old logo was an abstract "S" at 298x231 — not
+  square, so Android cropped it, and unreadable about what the app does.
+
+  The innermost dot is mint where the arcs are cyan. That is the "free"
+  in the name given a colour, and it also stops the mark reading as the
+  system's own WiFi indicator.
+
+  Everything sits inside the middle ~66%, which is the safe zone for
+  Android adaptive icons — outside it, launchers may crop to a circle.
+-->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1024px; height: 1024px;
+    display: grid; place-items: center;
+    background: #001B2E;
+  }
+  .plate {
+    width: 1024px; height: 1024px;
+    display: grid; place-items: center;
+    background:
+      radial-gradient(circle at 50% 38%, #063A5C 0%, #001B2E 62%, #00131F 100%);
+  }
+  svg { width: 660px; height: 660px; overflow: visible; }
+  .arc {
+    fill: none;
+    stroke-linecap: round;
+    stroke: url(#beam);
+  }
+</style>
+<div class="plate">
+  <svg viewBox="0 0 200 200">
+    <defs>
+      <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%"   stop-color="#7DD3FC" />
+        <stop offset="55%"  stop-color="#38BDF8" />
+        <stop offset="100%" stop-color="#22D3EE" />
+      </linearGradient>
+      <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="#6EE7B7" />
+        <stop offset="100%" stop-color="#34D399" />
+      </linearGradient>
+      <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="4" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+
+    <g filter="url(#soft)">
+      <!-- Three arcs, thinning outward so the eye starts at the source. -->
+      <path class="arc" stroke-width="15"
+            d="M 26 96 A 104 104 0 0 1 174 96" />
+      <path class="arc" stroke-width="16" opacity="0.92"
+            d="M 51 121 A 69 69 0 0 1 149 121" />
+      <path class="arc" stroke-width="17" opacity="0.98"
+            d="M 76 146 A 34 34 0 0 1 124 146" />
+      <circle cx="100" cy="168" r="13" fill="url(#core)" />
+    </g>
+  </svg>
+</div>
