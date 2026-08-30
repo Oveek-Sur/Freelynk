@@ -49,7 +49,12 @@ android {
     defaultConfig {
         applicationId = "com.freelynk.app"
         minSdk = 24
-        targetSdk = 34
+        // Play requires new apps to target a recent SDK, and 35 is what
+        // Android 15 brings. The change that actually bites is edge-to-edge:
+        // from 35 an app can no longer opt out, so content is drawn under
+        // the status and navigation bars. Every screen here wraps its body
+        // in SafeArea, which is what keeps that from clipping anything.
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

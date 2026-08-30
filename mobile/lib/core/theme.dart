@@ -35,11 +35,19 @@ class AppColors {
 class AppTheme {
   const AppTheme._();
 
+  /// Light icons over transparent system bars.
+  ///
+  /// The navigation bar is transparent rather than painted [AppColors.abyss].
+  /// From Android 15 an app targeting SDK 35 always draws edge to edge and
+  /// the bar colour is ignored, so asking for a solid one would be a request
+  /// the OS quietly drops — matching on older phones and not on newer ones.
+  /// Letting the page's own gradient run underneath looks right on both.
   static const systemOverlay = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppColors.abyss,
+    systemNavigationBarColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.light,
+    systemNavigationBarDividerColor: Colors.transparent,
   );
 
   static ThemeData get dark {
