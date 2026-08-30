@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/app_config.dart';
+import 'consent.dart';
 
 /// Tells the server "this device was used today", once a day at most.
 ///
@@ -50,6 +51,12 @@ class UsageReporter {
   /// Reports today's use, unless today has already been reported.
   Future<void> reportIfNewDay() async {
     if (!AppConfig.isConfigured) return;
+
+    // Checked here as well as in the launch gate. The privacy notice says
+    // nothing leaves the phone before it is read, and a promise that holds
+    // only because the screens happen to be ordered correctly is one bad
+    // refactor away from being untrue.
+    if (!await Consent.isAccepted()) return;
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -95,6 +102,7 @@ class UsageReporter {
   /// not the counter was reached, so this never blocks and never throws.
   Future<void> recordClick(String kind, String id) async {
     if (!AppConfig.isConfigured || id.isEmpty) return;
+    if (!await Consent.isAccepted()) return;
 
     try {
       await _client
