@@ -490,8 +490,20 @@ class ConnectionController extends StateNotifier<ConnectionState> {
     // Let go of the process first: the user asked to stop, so the persistent
     // notification should not outlive the tap.
     _syncKeepAlive(null);
-    await _wifi.disconnect();
+    final left = await _wifi.disconnect();
     if (!mounted) return;
+
+    if (!left) {
+      // Android refuses to let an app drop a network the user saved in the
+      // phone's own settings. Saying so beats a button that appears dead.
+      state = state.copyWith(
+        phase: ConnectionPhase.connected,
+        message: 'এই নেটওয়ার্কটি ফোনে সেভ করা — ফোনের ওয়াইফাই সেটিংস '
+            'থেকে বন্ধ করতে হবে।',
+      );
+      return;
+    }
+
     state = state.copyWith(
       phase: ConnectionPhase.idle,
       message: 'সংযোগ বন্ধ করা হয়েছে',

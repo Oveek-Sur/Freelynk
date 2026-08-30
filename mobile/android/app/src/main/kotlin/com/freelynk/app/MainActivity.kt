@@ -162,6 +162,47 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                /*
+                 * Join a network, whatever generation of security it uses.
+                 *
+                 * Replaces wifi_iot's connect, which only ever calls
+                 * setWpa2Passphrase(). A WPA3-only access point can never
+                 * match a WPA2 suggestion, so the app sat spinning until it
+                 * timed out with no explanation — which is exactly what
+                 * happened at a shop whose router was newer than the plugin.
+                 *
+                 * The security is read from the live scan rather than from
+                 * whatever the admin panel says, because the router is the
+                 * authority on what it will accept and a human typing "WPA"
+                 * into a form is not.
+                 */
+                "connectToNetwork" -> {
+                    val ssid = call.argument<String>("ssid").orEmpty()
+                    val password = call.argument<String>("password").orEmpty()
+                    if (ssid.isEmpty()) {
+                        result.success(mapOf("ok" to false, "reason" to "no-ssid"))
+                    } else {
+                        result.success(suggestNetwork(ssid, password))
+                    }
+                }
+
+                /*
+                 * Drop every suggestion this app has registered.
+                 *
+                 * Asks the system what we suggested instead of remembering it
+                 * in a field, which is why wifi_iot could not do this: its
+                 * memory dies with the process while Android's does not, so
+                 * after any restart its disconnect refused with "networkC
+                 * allback and networkSuggestions is null" even though the
+                 * app had made the connection.
+                 *
+                 * Removing the suggestion the device is currently using makes
+                 * Android disconnect from it.
+                 */
+                "clearSuggestions" -> {
+                    result.success(clearOurSuggestions())
+                }
+
                 // ------------------------------------------- keep alive
                 "startKeepAlive" -> {
                     try {
@@ -230,6 +271,164 @@ class MainActivity : FlutterActivity() {
             true
         } catch (e: Exception) {
             Log.w(TAG, "could not open battery optimisation settings", e)
+            false
+        }
+    }
+
+    /**
+     * What an access point will actually accept, read off the air.
+     *
+     * ScanResult.capabilities looks like "[RSN-SAE-CCMP][ESS]" or
+     * "[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]". A router in WPA2/WPA3
+     * transition mode advertises both, and phones differ in which they
+     * pick, so that case is reported as both rather than guessed at.
+     */
+    private data class ApSecurity(
+        val sae: Boolean,     // WPA3
+        val psk: Boolean,     // WPA2
+        val wep: Boolean,
+        val owe: Boolean,     // enhanced open
+        val open: Boolean,
+        val found: Boolean,
+    )
+
+    private fun readSecurity(ssid: String): ApSecurity {
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+        val caps = try {
+            @Suppress("DEPRECATION")
+            wm.scanResults
+                .filter { it.SSID?.trim() == ssid.trim() }
+                .joinToString(" ") { it.capabilities ?: "" }
+                .uppercase()
+        } catch (e: SecurityException) {
+            // No location grant: fall through to trying everything.
+            Log.w(TAG, "scan results unreadable", e)
+            ""
+        }
+
+        if (caps.isEmpty()) {
+            return ApSecurity(false, false, false, false, false, found = false)
+        }
+
+        return ApSecurity(
+            sae = caps.contains("SAE"),
+            psk = caps.contains("PSK"),
+            wep = caps.contains("WEP"),
+            owe = caps.contains("OWE"),
+            // No PSK, SAE or WEP anywhere in the capabilities means open.
+            open = !caps.contains("PSK") && !caps.contains("SAE") &&
+                !caps.contains("WEP") && !caps.contains("OWE"),
+            found = true,
+        )
+    }
+
+    private fun suggestNetwork(ssid: String, password: String): Map<String, Any?> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            // Pre-10 has the old WifiConfiguration API; wifi_iot still
+            // handles those correctly, so leave them to it.
+            return mapOf("ok" to false, "reason" to "legacy-android")
+        }
+
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val sec = readSecurity(ssid)
+        val suggestions = mutableListOf<android.net.wifi.WifiNetworkSuggestion>()
+
+        fun builder() = android.net.wifi.WifiNetworkSuggestion.Builder().setSsid(ssid)
+
+        when {
+            sec.open && password.isEmpty() -> suggestions += builder().build()
+
+            !sec.found -> {
+                // The scan came back empty — hidden network, or the results
+                // went stale. Offer every credentialled form we can and let
+                // Android pick the one the router answers to, rather than
+                // failing on a guess.
+                if (password.isNotEmpty()) {
+                    suggestions += builder().setWpa2Passphrase(password).build()
+                    suggestions += builder().setWpa3Passphrase(password).build()
+                } else {
+                    suggestions += builder().build()
+                }
+            }
+
+            else -> {
+                // Transition-mode routers advertise both; suggest both so
+                // the phone can take whichever it prefers.
+                if (sec.psk && password.isNotEmpty()) {
+                    suggestions += builder().setWpa2Passphrase(password).build()
+                }
+                if (sec.sae && password.isNotEmpty()) {
+                    suggestions += builder().setWpa3Passphrase(password).build()
+                }
+                if (sec.owe) suggestions += builder().setIsEnhancedOpen(true).build()
+                if (sec.wep) {
+                    // WPA3-era Android dropped WEP from the suggestion API
+                    // entirely. Say so plainly instead of failing silently.
+                    return mapOf(
+                        "ok" to false,
+                        "reason" to "wep-unsupported",
+                        "security" to "WEP",
+                    )
+                }
+            }
+        }
+
+        if (suggestions.isEmpty()) {
+            return mapOf("ok" to false, "reason" to "no-usable-security")
+        }
+
+        // Clear ours first: leaving a stale suggestion for the same SSID
+        // makes addNetworkSuggestions return DUPLICATE and change nothing.
+        clearOurSuggestions()
+
+        val status = try {
+            wm.addNetworkSuggestions(suggestions)
+        } catch (e: Exception) {
+            Log.w(TAG, "addNetworkSuggestions failed", e)
+            return mapOf("ok" to false, "reason" to "add-failed")
+        }
+
+        // Android re-evaluates suggestions when fresh scan results land, so
+        // asking for a scan turns a wait of minutes into one of seconds.
+        try {
+            @Suppress("DEPRECATION")
+            wm.startScan()
+        } catch (e: Exception) {
+            Log.w(TAG, "startScan refused", e)
+        }
+
+        val label = buildString {
+            if (sec.sae) append("WPA3 ")
+            if (sec.psk) append("WPA2 ")
+            if (sec.owe) append("OWE ")
+            if (sec.open) append("OPEN ")
+            if (isEmpty()) append("unknown")
+        }.trim()
+
+        return mapOf(
+            "ok" to (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS),
+            "status" to status,
+            "security" to label,
+            "count" to suggestions.size,
+            // The user refused this app's suggestions in a previous prompt;
+            // nothing will ever connect until they change that.
+            "needsApproval" to (status == 5),
+        )
+    }
+
+    private fun clearOurSuggestions(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            // Straight from the system, so this still works in a process
+            // that did not make the original suggestion.
+            val ours = wm.networkSuggestions
+            if (ours.isEmpty()) return true
+            wm.removeNetworkSuggestions(ours) ==
+                WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS
+        } catch (e: Exception) {
+            Log.w(TAG, "could not clear suggestions", e)
             false
         }
     }

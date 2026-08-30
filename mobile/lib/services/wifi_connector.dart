@@ -158,26 +158,36 @@ class WifiConnector {
     await _safe(() => WiFiForIoTPlugin.disconnect());
     await Future<void>.delayed(const Duration(seconds: 1));
 
-    final accepted = await WiFiForIoTPlugin.connect(
-      ssid,
-      password: network.isOpen ? null : network.password,
-      security: switch (network.security) {
-        'OPEN' => NetworkSecurity.NONE,
-        'WEP' => NetworkSecurity.WEP,
-        _ => NetworkSecurity.WPA,
-      },
-      joinOnce: true,
-      withInternet: true,
-    ).timeout(
-      const Duration(seconds: 35),
-      onTimeout: () => false,
+    // Our own implementation rather than the plugin's, which only ever
+    // offers a WPA2 passphrase. A WPA3 access point cannot match that, so
+    // the app used to spin until it timed out with nothing to show for it.
+    final res = await _safe(
+      () => _channel.invokeMapMethod<String, dynamic>('connectToNetwork', {
+        'ssid': ssid,
+        'password': network.isOpen ? '' : network.password,
+      }),
+      timeout: const Duration(seconds: 15),
     );
 
-    if (!accepted) {
-      throw const WifiException(
-        'কানেক্ট করা গেল না। পাসওয়ার্ড ভুল হতে পারে, অথবা সিগন্যাল দুর্বল।',
-      );
+    if (res == null) {
+      throw const WifiException('কানেক্ট শুরু করা যায়নি। আবার চেষ্টা করুন।');
     }
+
+    if (res['ok'] != true) {
+      throw WifiException(switch (res['reason']) {
+        'wep-unsupported' =>
+          'এই নেটওয়ার্কটি পুরনো WEP নিরাপত্তা ব্যবহার করে, যেটা নতুন '
+              'অ্যান্ড্রয়েড আর সমর্থন করে না। ফোনের ওয়াইফাই সেটিংস থেকে যুক্ত করুন।',
+        'legacy-android' =>
+          'এই অ্যান্ড্রয়েড সংস্করণে কানেক্ট করা যাচ্ছে না।',
+        _ when res['needsApproval'] == true =>
+          'আগে একবার অনুমতি না দেওয়ায় অ্যান্ড্রয়েড এই অ্যাপকে ওয়াইফাই যোগ '
+              'করতে দিচ্ছে না। সেটিংস → অ্যাপ → FreeLynk থেকে অনুমতি দিন।',
+        _ => 'কানেক্ট করা গেল না। পাসওয়ার্ড ভুল হতে পারে, অথবা সিগন্যাল দুর্বল।',
+      });
+    }
+
+    debugPrint('suggested $ssid as ${res['security']} (${res['count']} form)');
 
     // On Android 10+ the plugin only *registers a suggestion*; a `true` here
     // means Android accepted the suggestion, not that we joined anything.
@@ -223,10 +233,28 @@ class WifiConnector {
     }
   }
 
-  Future<void> disconnect() async {
+  /// Leaves the current network, if it is ours to leave.
+  ///
+  /// Returns false when Android is holding the connection on the user's
+  /// behalf — a network saved in the phone's own WiFi settings cannot be
+  /// dropped by an app, and pretending otherwise leaves a button that
+  /// looks broken.
+  Future<bool> disconnect() async {
     await _safe(() => _channel.invokeMethod('forceDisconnect', {'ssid': ''}));
     await _safe(() => WiFiForIoTPlugin.forceWifiUsage(false));
-    await _safe(() => WiFiForIoTPlugin.disconnect());
+
+    // Ask the system which suggestions are ours and drop those, rather
+    // than trusting a field that dies with the process. The plugin's own
+    // disconnect refuses after any restart for exactly that reason.
+    final cleared = await _safe(
+      () => _channel.invokeMethod<bool>('clearSuggestions'),
+    );
+
+    // Still on WiFi a moment later means the connection was never ours.
+    await Future<void>.delayed(const Duration(seconds: 2));
+    final stillOn = await isOnWifi();
+
+    return cleared == true && !stillOn;
   }
 
   // --------------------------------------------------------------- status
