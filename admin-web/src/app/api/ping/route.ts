@@ -61,39 +61,23 @@ export async function POST(req: Request) {
       ? body.platform.trim().slice(0, 16)
       : "android";
 
-  const now = new Date().toISOString();
+  // One statement: it updates the device row and, only if this device
+  // has not already been seen today, bumps that day's counter. Keeping
+  // the rule in SQL means a launch costs a single round trip, and means
+  // the "already counted today" decision is made where the row is
+  // locked rather than across the network.
+  const { error } = await db().rpc("record_device", {
+    p_id: id,
+    p_platform: platform,
+    p_version: version,
+  });
 
-  // Upsert, so first_seen survives: it is only written when the row is
-  // new, and this is what makes "total installs" mean something.
-  const device = await db()
-    .from("app_devices")
-    .upsert(
-      { id, last_seen: now, platform, app_version: version },
-      { onConflict: "id" },
-    );
-
-  if (device.error) {
+  if (error) {
     return NextResponse.json(
-      { error: device.error.message },
-      { status: 500, headers: NO_STORE },
-    );
-  }
-
-  // Day in Dhaka time, not UTC — otherwise "today" would roll over at
-  // six in the morning for the people actually using this.
-  const day = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Dhaka",
-  }).format(new Date());
-
-  // Second call is a no-op for a device already counted today, which is
-  // why the primary key is (device_id, day).
-  const activity = await db()
-    .from("app_activity")
-    .upsert({ device_id: id, day }, { onConflict: "device_id,day" });
-
-  if (activity.error) {
-    return NextResponse.json(
-      { error: activity.error.message },
+      {
+        error: error.message,
+        hint: "admin-web/schema-analytics.sql একবার Supabase SQL editor-এ চালান।",
+      },
       { status: 500, headers: NO_STORE },
     );
   }
