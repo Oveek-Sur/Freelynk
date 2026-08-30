@@ -43,10 +43,16 @@ console.log("\nAdmin gating (no session)");
 {
   const r = await fetch(`${BASE}/admin`, { redirect: "manual" });
   check("/admin redirects to /login", r.status === 307 || r.status === 308, `HTTP ${r.status}`);
-  for (const p of ["/api/networks", "/api/banners", "/api/shops", "/api/upload"]) {
-    const g = await fetch(`${BASE}${p}`, { method: p === "/api/upload" ? "POST" : "GET" });
+  for (const p of ["/api/networks", "/api/banners", "/api/shops", "/api/stats"]) {
+    const g = await fetch(`${BASE}${p}`);
     check(`${p} rejects anonymous`, g.status === 401, `HTTP ${g.status}`);
   }
+
+  // Image upload was removed in favour of pasting a public link, so there
+  // is no longer an endpoint that accepts a file at all. Better than a
+  // guarded one: an attack surface that does not exist cannot be got past.
+  const upload = await fetch(`${BASE}/api/upload`, { method: "POST" });
+  check("/api/upload no longer exists", upload.status === 404, `HTTP ${upload.status}`);
 }
 
 // ── 3. login ─────────────────────────────────────────────────────────────
