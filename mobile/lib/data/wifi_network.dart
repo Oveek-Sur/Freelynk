@@ -64,11 +64,37 @@ class NearbyNetwork {
   /// So we keep what was actually on the air and connect with that.
   final String? onAirSsid;
 
+  /// What the access point advertised, e.g. "[RSN-SAE-CCMP][ESS]".
+  ///
+  /// Kept so the app can say which generation of security a network uses
+  /// instead of trusting whatever was typed into the admin panel — the
+  /// router is the authority on what it will accept.
+  final String? capabilities;
+
   const NearbyNetwork({
     required this.network,
     required this.level,
     this.onAirSsid,
+    this.capabilities,
   });
+
+  /// A short, readable name for the security in use.
+  ///
+  /// WPA2 and WPA3 both appear on a transition-mode router, which is
+  /// common and worth showing as such rather than picking one.
+  String get securityLabel {
+    final caps = (capabilities ?? '').toUpperCase();
+    if (caps.isEmpty) return 'অজানা';
+
+    final parts = <String>[
+      if (caps.contains('SAE')) 'WPA3',
+      if (caps.contains('PSK')) 'WPA2',
+      if (caps.contains('WEP')) 'WEP',
+      if (caps.contains('OWE')) 'OWE',
+    ];
+    if (parts.isEmpty) return 'খোলা';
+    return parts.join('/');
+  }
 
   /// The SSID to hand to Android. Falls back to the stored spelling when the
   /// network was not seen in a scan (manual connect from the saved list).

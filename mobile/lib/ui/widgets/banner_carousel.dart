@@ -68,9 +68,12 @@ class _BannerCarouselState extends State<BannerCarousel> {
     final uri = Uri.tryParse(banner.linkUrl);
     if (uri == null) return;
 
-    // The server already rejects anything that isn't http(s), but the APK
-    // may be talking to an older deployment, so check again here.
-    if (uri.scheme != 'http' && uri.scheme != 'https') return;
+    // The server already refuses anything else, but this APK may be talking
+    // to an older deployment, so the gate is repeated here rather than
+    // trusted. mailto is allowed so an advert asking to be written to can
+    // open the mail app; it only fills a compose window, nothing runs.
+    const openable = {'http', 'https', 'mailto'};
+    if (!openable.contains(uri.scheme)) return;
 
     // Not awaited: whether the advertiser's counter went up is not worth
     // delaying the browser by, and it must not stop the link opening.

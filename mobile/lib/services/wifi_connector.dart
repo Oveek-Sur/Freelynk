@@ -75,36 +75,73 @@ class WifiConnector {
 
   // ----------------------------------------------------------------- scan
 
-  /// Scans the air and returns only those saved networks that are in range,
+  /// Scans the air and returns the saved networks that are in range,
   /// strongest first (priority wins ties).
-  Future<List<NearbyNetwork>> scanFor(List<WifiNetwork> saved) async {
-    if (saved.isEmpty) return const [];
+  ///
+  /// [seen] is how many access points the radio found in total, ours or
+  /// not. Pressing "try again" and getting the same empty list tells the
+  /// user nothing; knowing the phone could see twelve networks and none of
+  /// them were theirs is a different answer from seeing none at all, which
+  /// means the radio or the area is the problem.
+  Future<({List<NearbyNetwork> nearby, int seen})> scanFor(
+    List<WifiNetwork> saved,
+  ) async {
+    if (saved.isEmpty) return (nearby: const <NearbyNetwork>[], seen: 0);
 
     final can = await WiFiScan.instance.canStartScan();
     if (can != CanStartScan.yes) {
       throw WifiException(_scanErrorText(can));
     }
 
-    await WiFiScan.instance.startScan();
-    await Future<void>.delayed(const Duration(seconds: 3));
+    // Listen before asking, or a fast radio can answer before we are ready.
+    final fresh = WiFiScan.instance.onScannedResultsAvailable.first;
+
+    // Android allows only a handful of scans every couple of minutes. Past
+    // that it quietly refuses and hands back whatever it last saw — so a
+    // router that has just come back on stays invisible however many times
+    // the button is pressed. That is not something to paper over: if the
+    // results cannot be refreshed, the person deserves to be told why
+    // rather than watching the same empty list appear again.
+    final started = await WiFiScan.instance.startScan();
 
     final canRead = await WiFiScan.instance.canGetScannedResults();
     if (canRead != CanGetScannedResults.yes) {
       throw const WifiException('স্ক্যানের ফলাফল পড়া যাচ্ছে না।');
     }
 
-    final results = await WiFiScan.instance.getScannedResults();
+    List<WiFiAccessPoint> results;
+    if (started) {
+      // Wait for the radio to actually report, rather than sleeping a fixed
+      // three seconds and hoping. Slow phones needed longer; fast ones were
+      // kept waiting for nothing.
+      results = await fresh.timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => WiFiScan.instance.getScannedResults(),
+      );
+    } else {
+      results = await WiFiScan.instance.getScannedResults();
+      if (results.isEmpty) {
+        throw const WifiException(
+          'অ্যান্ড্রয়েড এই মুহূর্তে নতুন করে খুঁজতে দিচ্ছে না '
+          '(একটু পরপর কয়েকবারই দেওয়া যায়)। এক মিনিট পরে আবার চেষ্টা করুন।',
+        );
+      }
+    }
 
     // Strongest reading wins when an SSID shows up on several APs/bands.
     // Keep the SSID as broadcast, not the normalised key — we match loosely
     // but must join byte-exactly. See [NearbyNetwork.onAirSsid].
-    final strongest = <String, ({int level, String ssid})>{};
+    final strongest = <String, ({int level, String ssid, String caps})>{};
     for (final ap in results) {
       final key = WifiNetwork.normalizeSsid(ap.ssid);
       if (key.isEmpty) continue;
       final current = strongest[key];
       if (current == null || ap.level > current.level) {
-        strongest[key] = (level: ap.level, ssid: ap.ssid.trim());
+        strongest[key] = (
+          level: ap.level,
+          ssid: ap.ssid.trim(),
+          caps: ap.capabilities,
+        );
       }
     }
 
@@ -117,6 +154,7 @@ class WifiConnector {
             network: network,
             level: hit.level,
             onAirSsid: hit.ssid,
+            capabilities: hit.caps,
           ),
         );
       }
@@ -127,7 +165,7 @@ class WifiConnector {
       return byPriority != 0 ? byPriority : b.level.compareTo(a.level);
     });
 
-    return nearby;
+    return (nearby: nearby, seen: strongest.length);
   }
 
   String _scanErrorText(CanStartScan can) => switch (can) {

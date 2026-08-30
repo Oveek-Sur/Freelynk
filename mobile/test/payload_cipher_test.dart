@@ -123,6 +123,35 @@ void main() {
       expect(seen.connectSsid, isNot(saved.ssid));
     });
 
+    test('reads the security an access point actually advertises', () {
+      const net = WifiNetwork(
+        id: '1', name: 'n', ssid: 'n', password: 'p',
+        security: 'WPA', area: '', note: '', priority: 0,
+      );
+      String label(String caps) =>
+          NearbyNetwork(network: net, level: -50, capabilities: caps)
+              .securityLabel;
+
+      // The generation the stored 'security' column cannot express. This is
+      // the case that made a shop's router spin forever: a WPA2-only
+      // passphrase can never match it.
+      expect(label('[RSN-SAE-CCMP][ESS]'), 'WPA3');
+
+      expect(label('[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]'), 'WPA2');
+
+      // Transition mode is common and belongs to both, so it is reported as
+      // both rather than the code picking one and being wrong half the time.
+      expect(label('[RSN-PSK+SAE-CCMP][ESS]'), 'WPA3/WPA2');
+
+      expect(label('[WEP][ESS]'), 'WEP');
+      expect(label('[RSN-OWE-CCMP][ESS]'), 'OWE');
+      expect(label('[ESS]'), 'খোলা');
+
+      // Never seen in a scan: say so instead of guessing "open", which
+      // would invite a connection attempt with no password.
+      expect(label(''), 'অজানা');
+    });
+
     test('shop search looks at the name, the stock and the address', () {
       final grocer = Shop.tryParse({
         'name': 'রহিম স্টোর',

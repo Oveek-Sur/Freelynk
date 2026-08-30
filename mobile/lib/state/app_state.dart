@@ -306,15 +306,21 @@ class ConnectionController extends StateNotifier<ConnectionState> {
         return;
       }
 
-      final nearby = await _wifi.scanFor(_saved);
+      final result = await _wifi.scanFor(_saved);
       if (!mounted) return;
 
       state = state.copyWith(
-        nearby: nearby,
+        nearby: result.nearby,
         scanning: false,
-        message: nearby.isEmpty
-            ? 'আশেপাশে সেভ করা কোনো নেটওয়ার্ক নেই'
-            : '${nearby.length} টি নেটওয়ার্ক পাওয়া গেছে',
+        message: result.nearby.isNotEmpty
+            ? '${result.nearby.length} টি নেটওয়ার্ক পাওয়া গেছে'
+            // Saying how many were seen turns "nothing happened" into an
+            // answer: none at all points at the radio or the place, while
+            // a dozen means the list simply has none of them.
+            : result.seen == 0
+                ? 'আশেপাশে কোনো ওয়াইফাই-ই পাওয়া গেল না'
+                : 'আশেপাশে ${result.seen} টি ওয়াইফাই আছে, '
+                    'কিন্তু সেভ করা কোনোটি নেই',
       );
     } on WifiException catch (e) {
       if (!mounted) return;
@@ -364,21 +370,25 @@ class ConnectionController extends StateNotifier<ConnectionState> {
       message: 'আশেপাশে খোঁজা হচ্ছে…',
     );
 
-    late List<NearbyNetwork> candidates;
+    late ({List<NearbyNetwork> nearby, int seen}) scan;
     try {
-      candidates = await _wifi.scanFor(_saved);
+      scan = await _wifi.scanFor(_saved);
     } on WifiException catch (e) {
       state = state.copyWith(phase: ConnectionPhase.failed, message: e.message);
       return;
     }
 
     if (!mounted) return;
+    final candidates = scan.nearby;
     state = state.copyWith(nearby: candidates);
 
     if (candidates.isEmpty) {
       state = state.copyWith(
         phase: ConnectionPhase.failed,
-        message: 'আশেপাশে সেভ করা কোনো নেটওয়ার্ক পাওয়া যায়নি।',
+        message: scan.seen == 0
+            ? 'আশেপাশে কোনো ওয়াইফাই-ই পাওয়া গেল না। '
+                'রাউটার চালু আছে কিনা দেখুন।'
+            : 'আশেপাশে ${scan.seen} টি ওয়াইফাই আছে, কিন্তু সেভ করা কোনোটি নেই।',
       );
       return;
     }

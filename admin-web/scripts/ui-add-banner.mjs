@@ -164,7 +164,7 @@ try {
 
   // ── type the link and press preview ────────────────────────────────────
   console.log("\nUsing the image link + preview");
-  const IMG = "https://picsum.photos/seed/uitest/1200/500";
+  const IMG = "https://freelynk.vercel.app/promo/freelynk-ad.png";
 
   await evaluate(`
     (() => {
@@ -196,7 +196,7 @@ try {
   const previewOk = await evaluate(`
     (() => {
       const img = [...document.querySelectorAll('img')]
-        .find(i => i.src.includes('picsum'));
+        .find(i => i.src === ${JSON.stringify(IMG)});
       return {
         loaded: !!img && img.complete && img.naturalWidth > 0,
         confirmed: document.body.innerText.includes('ছবিটি বসানো হয়েছে'),
@@ -208,7 +208,7 @@ try {
 
   // ── fill the rest and save ─────────────────────────────────────────────
   console.log("\nSaving the banner");
-  const TITLE = "UI দিয়ে যোগ করা ব্যানার";
+  const TITLE = "FreeLynk — বিজ্ঞাপন দিন";
 
   await evaluate(`
     (() => {
@@ -220,7 +220,7 @@ try {
       const title = document.querySelector('input[placeholder="ঈদ অফার"]');
       const link  = document.querySelector('input[placeholder="https://example.com"]');
       set(title, ${JSON.stringify(TITLE)});
-      if (link) set(link, 'https://example.com/ui-test');
+      if (link) set(link, "mailto:falconsecintelligence@gmail.com");
       return true;
     })()
   `);

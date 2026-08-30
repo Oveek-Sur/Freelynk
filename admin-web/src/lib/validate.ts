@@ -4,18 +4,25 @@ export function clean(v: unknown): string {
 }
 
 /**
- * Only http(s) links survive.
+ * Only links that are safe for a phone to open.
  *
  * Returns "" for an empty input (meaning "no link"), the normalised URL
  * when it is safe, and null when it must be rejected. A `javascript:` or
- * `intent:` URL here would be opened by the phone, so this is a real gate
- * rather than tidiness.
+ * `intent:` URL here would be handed straight to the handset, so this is a
+ * real gate rather than tidiness.
+ *
+ * `mailto:` is allowed alongside http(s) because an advert whose whole
+ * purpose is "write to us" should open the mail app when tapped. It only
+ * ever fills in a compose window — there is nothing to execute — so it
+ * carries none of the risk that keeps the other schemes out.
  */
+const OPENABLE = new Set(["http:", "https:", "mailto:"]);
+
 export function safeLink(raw: string): string | null {
   if (!raw) return "";
   try {
     const u = new URL(raw);
-    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+    return OPENABLE.has(u.protocol) ? u.toString() : null;
   } catch {
     return null;
   }
