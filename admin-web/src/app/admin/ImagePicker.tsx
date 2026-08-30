@@ -71,7 +71,21 @@ export default function ImagePicker({
     setShown(url.toString());
   }
 
-  const dirty = draft.trim() !== shown;
+  /**
+   * A picture that loaded is a picture the phone can show, so there is
+   * nothing left to confirm — it is committed the moment it appears.
+   *
+   * There used to be a "keep this image" button here, and it could never
+   * be pressed: it enabled on `draft !== shown`, which pressing প্রিভিউ
+   * made false in the same breath. The button greyed itself out, the page
+   * said the image was saved, and the field behind it was still empty, so
+   * saving failed on "ব্যানারের ছবি দিতে হবে" with the picture in plain
+   * sight. One step fewer, and that whole class of mismatch is gone.
+   */
+  function commit(url: string) {
+    setState("ok");
+    if (url !== value) onChange(url);
+  }
 
   return (
     <div>
@@ -112,9 +126,12 @@ export default function ImagePicker({
             src={shown}
             alt=""
             className="h-full w-full object-cover"
-            onLoad={() => setState("ok")}
+            onLoad={() => commit(shown)}
             onError={() => {
               setState("bad");
+              // A link that fails here is not saved, so a broken picture
+              // cannot reach a phone.
+              if (value) onChange("");
               setError(
                 "ছবিটি লোড হয়নি। লিংকটি সবার জন্য খোলা কিনা দেখুন — " +
                   "কিছু সাইট (যেমন Google Drive) সরাসরি ছবি দেখায় না।",
@@ -134,17 +151,8 @@ export default function ImagePicker({
         )}
       </div>
 
-      <div className="mt-2 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={state !== "ok" || !dirty}
-          onClick={() => onChange(draft.trim())}
-          className="btn-ghost !px-3 !py-1.5 !text-xs disabled:!opacity-40"
-        >
-          {dirty ? "এই ছবিটি রাখুন" : "রাখা হয়েছে"}
-        </button>
-
-        {shown && (
+      {shown && (
+        <div className="mt-2">
           <button
             type="button"
             onClick={() => {
@@ -158,14 +166,14 @@ export default function ImagePicker({
           >
             সরান
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
 
-      {state === "ok" && !dirty && shown && (
+      {state === "ok" && shown && (
         <p className="mt-2 text-xs text-emerald-300">
-          ছবিটি দেখা যাচ্ছে — ফোনেও এভাবেই আসবে।
+          ছবিটি বসানো হয়েছে — ফোনেও এভাবেই আসবে। এবার সেভ করুন।
         </p>
       )}
 
